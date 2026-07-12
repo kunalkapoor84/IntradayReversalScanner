@@ -163,6 +163,43 @@ class DhanHTTPClient:
         "FO": {"exch": "NSE", "seg": "D", "instr": "FUTSTK", "series": ""},
     }
 
+    _FALLBACK_FO_UNDERLYINGS = {
+        "ABB", "ABCAPITAL", "ADANIENSOL", "ADANIENT", "ADANIGREEN",
+        "ADANIPORTS", "ADANIPOWER", "ALKEM", "AMBER", "AMBUJACEM", "ANGELONE",
+        "APLAPOLLO", "APOLLOHOSP", "ASHOKLEY", "ASIANPAINT", "ASTRAL", "AUBANK",
+        "AUROPHARMA", "AXISBANK", "BAJAJ", "BAJAJFINSV", "BAJAJHLDNG",
+        "BAJFINANCE", "BANDHANBNK", "BANKBARODA", "BANKINDIA", "BDL", "BEL",
+        "BHARATFORG", "BHARTIARTL", "BHEL", "BIOCON", "BLUESTARCO", "BOSCHLTD",
+        "BPCL", "BRITANNIA", "BSE", "CAMS", "CANBK", "CDSL", "CGPOWER",
+        "CHOLAFIN", "CIPLA", "COALINDIA", "COCHINSHIP", "COFORGE", "COLPAL",
+        "CONCOR", "CROMPTON", "CUMMINSIND", "DABUR", "DALBHARAT", "DELHIVERY",
+        "DIVISLAB", "DIXON", "DLF", "DMART", "DRREDDY", "EICHERMOT", "ETERNAL",
+        "EXIDEIND", "FEDERALBNK", "FORCEMOT", "FORTIS", "GAIL", "GLENMARK",
+        "GMRAIRPORT", "GODFRYPHLP", "GODREJCP", "GODREJPROP", "GRASIM", "GVT&D",
+        "HAL", "HAVELLS", "HCLTECH", "HDFCAMC", "HDFCBANK", "HDFCLIFE",
+        "HEROMOTOCO", "HINDALCO", "HINDPETRO", "HINDUNILVR", "HINDZINC",
+        "HYUNDAI", "ICICIBANK", "ICICIGI", "ICICIPRULI", "IDEA", "IDFCFIRSTB",
+        "IEX", "INDHOTEL", "INDIANB", "INDIGO", "INDUSINDBK", "INDUSTOWER",
+        "INFY", "INOXWIND", "IOC", "IREDA", "IRFC", "ITC", "JINDALSTEL",
+        "JIOFIN", "JSWENERGY", "JSWSTEEL", "JUBLFOOD", "KALYANKJIL", "KAYNES",
+        "KEI", "KFINTECH", "KOTAKBANK", "KPITTECH", "LAURUSLABS", "LICHSGFIN",
+        "LICI", "LODHA", "LTF", "LTM", "LUPIN", "M&M", "MANAPPURAM", "MANKIND",
+        "MARICO", "MARUTI", "MAXHEALTH", "MAZDOCK", "MCX", "MFSL", "MOTHERSON",
+        "MOTILALOFS", "MPHASIS", "MUTHOOTFIN", "NAM", "NATIONALUM", "NAUKRI",
+        "NBCC", "NESTLEIND", "NHPC", "NMDC", "NTPC", "NUVAMA", "NYKAA",
+        "OBEROIRLTY", "OFSS", "OIL", "ONGC", "PAGEIND", "PATANJALI", "PAYTM",
+        "PERSISTENT", "PETRONET", "PFC", "PGEL", "PHOENIXLTD", "PIDILITIND",
+        "PIIND", "PNB", "PNBHOUSING", "POLICYBZR", "POLYCAB", "POWERGRID",
+        "POWERINDIA", "PREMIERENE", "PRESTIGE", "RADICO", "RBLBANK", "RECLTD",
+        "RELIANCE", "RVNL", "SAIL", "SBICARD", "SBILIFE", "SBIN", "SHREECEM",
+        "SHRIRAMFIN", "SIEMENS", "SOLARINDS", "SONACOMS", "SRF", "SUNPHARMA",
+        "SUPREMEIND", "SUZLON", "SWIGGY", "TATACONSUM", "TATAELXSI",
+        "TATAPOWER", "TATASTEEL", "TCS", "TECHM", "TIINDIA", "TITAN", "TMPV",
+        "TORNTPHARM", "TRENT", "TVSMOTOR", "ULTRACEMCO", "UNIONBANK",
+        "UNITDSPR", "UNOMINDA", "UPL", "VBL", "VEDL", "VMM", "VOLTAS",
+        "WAAREEENER", "WIPRO", "YESBANK", "ZYDUSLIFE",
+    }
+
     @staticmethod
     def _extract_underlying(fut_symbol: str) -> str:
         return fut_symbol.split("-")[0]
@@ -281,13 +318,17 @@ class MarketDataManager:
                     if segment == "FO":
                         for s in stocks:
                             sym = self._extract_underlying(s.get("trading_symbol", ""))
-                            if sym:
+                            if sym and not sym[0].isdigit() and len(sym) > 2:
                                 fo_underlyings.add(sym)
                     else:
                         all_stocks.extend(stocks)
             except Exception as e:
                 logger.warning(f"Failed to fetch {segment} list: {e}")
                 continue
+
+        if not fo_underlyings and "FO" in CONFIG["market"]["segments"]:
+            fo_underlyings = self._FALLBACK_FO_UNDERLYINGS
+            logger.warning(f"FO list empty, using fallback of {len(fo_underlyings)} underlyings")
 
         if fo_underlyings:
             eq_count = len(all_stocks)
