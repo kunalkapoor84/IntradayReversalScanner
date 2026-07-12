@@ -56,7 +56,7 @@ class ScannerManager:
         self.all_results = []
         ticker_map = ticker_map or {}
 
-        semaphore = asyncio.Semaphore(5)
+        semaphore = asyncio.Semaphore(10)
         logger.info(f"{ist_now()} | Scanning {len(security_ids)} tickers with {len(enabled_scanners)} scanners")
 
         async def _scan_one(sid: str) -> List[Dict[str, Any]]:

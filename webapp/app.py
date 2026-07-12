@@ -181,16 +181,21 @@ def scan_single():
 @app.route("/api/scan_all", methods=["POST"])
 def scan_all():
     try:
+        req_ids = request.json.get("security_ids") if request.json else None
+
         df = run_async(market_data.build_universe())
         if df.empty:
             return jsonify({"error": "No universe data"}), 500
 
         if "security_id" in df.columns and "trading_symbol" in df.columns:
             ticker_map = dict(zip(df["security_id"].astype(str), df["trading_symbol"]))
-            security_ids = list(ticker_map.keys())
+            if req_ids:
+                security_ids = [s for s in req_ids if s in ticker_map]
+            else:
+                security_ids = list(ticker_map.keys())
         else:
             ticker_map = {}
-            security_ids = df.index.tolist()
+            security_ids = req_ids or df.index.tolist()
 
         manager = ScannerManager(market_data)
         signals = run_async(manager.scan_all(security_ids, ticker_map))

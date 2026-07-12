@@ -30,14 +30,19 @@ class DhanHTTPClient:
         self.base_url = dhan_config["api_base_url"]
         self.timeout = dhan_config["timeout_seconds"]
         self.max_retries = dhan_config["max_retries"]
-        self._client: Optional[httpx.AsyncClient] = None
         self._ws_client: Optional[Any] = None
         self._has_valid_creds: bool = bool(self.client_id and self.access_token and "your_" not in self.client_id)
         self._last_request = 0.0
         self._security_list_cache: Dict[str, Tuple[float, List[Dict[str, Any]]]] = {}
 
-    async def _get_client(self) -> httpx.AsyncClient:
-        return httpx.AsyncClient(
+    async def _request(self, method: str, endpoint: str, **kwargs) -> Dict[str, Any]:
+        url = f"{self.base_url}{endpoint}"
+        now = time.monotonic()
+        since_last = now - self._last_request
+        if since_last < 0.2:
+            await asyncio.sleep(0.2 - since_last)
+        self._last_request = time.monotonic()
+        async with httpx.AsyncClient(
             base_url=self.base_url,
             timeout=self.timeout,
             headers={
@@ -45,36 +50,27 @@ class DhanHTTPClient:
                 "client-id": self.client_id,
                 "Content-Type": "application/json",
             },
-        )
-
-    async def _request(self, method: str, endpoint: str, **kwargs) -> Dict[str, Any]:
-        client = await self._get_client()
-        url = f"{self.base_url}{endpoint}"
-        now = time.monotonic()
-        since_last = now - self._last_request
-        if since_last < 0.2:
-            await asyncio.sleep(0.2 - since_last)
-        self._last_request = time.monotonic()
-        for attempt in range(self.max_retries):
-            try:
-                response = await client.request(method, url, **kwargs)
-                response.raise_for_status()
-                return response.json()
-            except httpx.HTTPStatusError as e:
-                if e.response.status_code == 429:
-                    wait = 2 ** (attempt + 1)
-                    logger.warning(f"Rate limited on {endpoint}, retrying in {wait}s")
-                    await asyncio.sleep(wait)
-                    continue
-                logger.error(f"HTTP error {e.response.status_code} on {endpoint}: {e.response.text}")
-                raise
-            except httpx.TimeoutException:
-                logger.error(f"Timeout on {endpoint}")
-                raise
-            except Exception as e:
-                logger.error(f"Request error on {endpoint}: {e}")
-                raise
-        raise Exception(f"Failed after {self.max_retries} retries: {endpoint}")
+        ) as client:
+            for attempt in range(self.max_retries):
+                try:
+                    response = await client.request(method, url, **kwargs)
+                    response.raise_for_status()
+                    return response.json()
+                except httpx.HTTPStatusError as e:
+                    if e.response.status_code == 429:
+                        wait = 2 ** (attempt + 1)
+                        logger.warning(f"Rate limited on {endpoint}, retrying in {wait}s")
+                        await asyncio.sleep(wait)
+                        continue
+                    logger.error(f"HTTP error {e.response.status_code} on {endpoint}: {e.response.text}")
+                    raise
+                except httpx.TimeoutException:
+                    logger.error(f"Timeout on {endpoint}")
+                    raise
+                except Exception as e:
+                    logger.error(f"Request error on {endpoint}: {e}")
+                    raise
+            raise Exception(f"Failed after {self.max_retries} retries: {endpoint}")
 
     async def get_intraday_candles(
         self, security_id: str, interval: str, from_date: str, to_date: str
@@ -346,8 +342,7 @@ class DhanHTTPClient:
         return 0.0
 
     async def close(self):
-        if self._client and not self._client.is_closed:
-            await self._client.aclose()
+        pass
 
 
 class MarketDataManager:
