@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import asyncio
+import gc
 import sys
 import traceback
 from datetime import datetime
@@ -45,6 +46,12 @@ def convert_val(v):
 
 app = Flask(__name__)
 market_data = MarketDataManager()
+
+@app.after_request
+def cleanup(response):
+    market_data.invalidate_cache()
+    gc.collect()
+    return response
 
 
 def run_async(coro):

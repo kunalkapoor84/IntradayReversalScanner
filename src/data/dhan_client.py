@@ -37,13 +37,6 @@ class DhanHTTPClient:
         self._last_request = 0.0
 
     async def _get_client(self) -> httpx.AsyncClient:
-        if self._client is not None and not self._client.is_closed:
-            try:
-                loop = asyncio.get_running_loop()
-            except RuntimeError:
-                loop = None
-            if loop is not None:
-                return self._client
         if self._client is not None:
             await self._client.aclose()
         self._client = httpx.AsyncClient(
