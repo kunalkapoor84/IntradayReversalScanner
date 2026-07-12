@@ -14,7 +14,7 @@ market:
   segments:
     - EQ   # NSE Cash
     - FO   # F&O
-  top_n_stocks: 500
+  top_n_stocks: 250
   min_avg_volume: 200000
   min_price: 100
   min_market_cap_crore: 5000
