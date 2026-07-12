@@ -15,4 +15,4 @@ ENV PYTHONUNBUFFERED=1
 RUN mkdir -p logs webapp/logs
 
 WORKDIR /app/webapp
-CMD ["python", "app.py", "10000"]
+CMD python app.py $PORT
