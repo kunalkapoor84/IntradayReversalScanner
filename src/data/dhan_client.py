@@ -35,6 +35,7 @@ class DhanHTTPClient:
         self._has_valid_creds: bool = bool(self.client_id and self.access_token and "your_" not in self.client_id)
         self._rate_limiter = asyncio.Semaphore(5)
         self._last_request = 0.0
+        self._security_list_cache: Dict[str, Tuple[float, List[Dict[str, Any]]]] = {}
 
     async def _get_client(self) -> httpx.AsyncClient:
         if self._client is None or self._client.is_closed:
@@ -208,13 +209,17 @@ class DhanHTTPClient:
         if not self._has_valid_creds:
             raise httpx.HTTPStatusError("No valid credentials", request=None, response=None)
 
+        cached = self._security_list_cache.get(segment)
+        if cached and (time.monotonic() - cached[0]) < 900:
+            return cached[1]
+
         cfg = self._SEGMENT_MAP.get(segment)
         if cfg is None:
             return []
 
         csv_cfg = self.CSVS["SE"]
         try:
-            async with httpx.AsyncClient(timeout=30) as client:
+            async with httpx.AsyncClient(timeout=60) as client:
                 resp = await client.get(csv_cfg["url"])
                 resp.raise_for_status()
                 content = resp.text
@@ -237,6 +242,7 @@ class DhanHTTPClient:
                     "name": row.get(csv_cfg["name"], ""),
                 })
 
+        self._security_list_cache[segment] = (time.monotonic(), results)
         logger.info(f"Loaded {len(results)} securities for segment {segment}")
         return results
 
@@ -415,15 +421,14 @@ class MarketDataManager:
         return df
 
     async def resolve_ticker(self, trading_symbol: str) -> str | None:
-        for segment in CONFIG["market"]["segments"]:
-            try:
-                stocks = await self.client.get_security_list(segment)
-                if isinstance(stocks, list):
-                    for stock in stocks:
-                        if stock.get("trading_symbol", "").upper() == trading_symbol.upper():
-                            return stock["security_id"]
-            except Exception:
-                continue
+        try:
+            stocks = await self.client.get_security_list("EQ")
+            if isinstance(stocks, list):
+                for stock in stocks:
+                    if stock.get("trading_symbol", "").upper() == trading_symbol.upper():
+                        return stock["security_id"]
+        except Exception:
+            pass
         return None
 
     async def get_multi_timeframe_data(
