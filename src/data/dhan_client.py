@@ -38,16 +38,15 @@ class DhanHTTPClient:
         self._security_list_cache: Dict[str, Tuple[float, List[Dict[str, Any]]]] = {}
 
     async def _get_client(self) -> httpx.AsyncClient:
-        if self._client is None or self._client.is_closed:
-            self._client = httpx.AsyncClient(
-                base_url=self.base_url,
-                timeout=self.timeout,
-                headers={
-                    "access-token": self.access_token,
-                    "client-id": self.client_id,
-                    "Content-Type": "application/json",
-                },
-            )
+        self._client = httpx.AsyncClient(
+            base_url=self.base_url,
+            timeout=self.timeout,
+            headers={
+                "access-token": self.access_token,
+                "client-id": self.client_id,
+                "Content-Type": "application/json",
+            },
+        )
         return self._client
 
     async def _request(self, method: str, endpoint: str, **kwargs) -> Dict[str, Any]:
