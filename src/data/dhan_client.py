@@ -33,8 +33,14 @@ class DhanHTTPClient:
         self._client: Optional[httpx.AsyncClient] = None
         self._ws_client: Optional[Any] = None
         self._has_valid_creds: bool = bool(self.client_id and self.access_token and "your_" not in self.client_id)
-        self._rate_limiter = asyncio.Semaphore(5)
+        self._rate_limiter_sem = None
         self._last_request = 0.0
+
+    @property
+    def _rate_limiter(self) -> asyncio.Semaphore:
+        if self._rate_limiter_sem is None:
+            self._rate_limiter_sem = asyncio.Semaphore(5)
+        return self._rate_limiter_sem
         self._security_list_cache: Dict[str, Tuple[float, List[Dict[str, Any]]]] = {}
 
     async def _get_client(self) -> httpx.AsyncClient:

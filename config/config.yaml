@@ -7,8 +7,8 @@ dhan:
   access_token: "${DHAN_ACCESS_TOKEN}"
   api_base_url: "https://api.dhan.co/v2"
   ws_url: "wss://api.dhan.co/v2/ws"
-  timeout_seconds: 30
-  max_retries: 3
+  timeout_seconds: 10
+  max_retries: 1
 
 market:
   segments:
