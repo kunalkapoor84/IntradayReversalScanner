@@ -165,8 +165,7 @@ class DhanHTTPClient:
 
     @staticmethod
     def _extract_underlying(fut_symbol: str) -> str:
-        import re
-        return re.sub(r"\d.*", "", fut_symbol)
+        return fut_symbol.split("-")[0]
 
     async def get_security_list(self, segment: str = "EQ") -> List[Dict[str, Any]]:
         if not self._has_valid_creds:
