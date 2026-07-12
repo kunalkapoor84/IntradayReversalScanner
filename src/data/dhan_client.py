@@ -161,8 +161,13 @@ class DhanHTTPClient:
 
     _SEGMENT_MAP = {
         "EQ": {"exch": "NSE", "seg": "E", "instr": "EQUITY", "series": "EQ"},
-        "FO": None,
+        "FO": {"exch": "NSE", "seg": "D", "instr": "FUTSTK", "series": ""},
     }
+
+    @staticmethod
+    def _extract_underlying(fut_symbol: str) -> str:
+        import re
+        return re.sub(r"\d.*", "", fut_symbol)
 
     async def get_security_list(self, segment: str = "EQ") -> List[Dict[str, Any]]:
         if not self._has_valid_creds:
@@ -189,7 +194,7 @@ class DhanHTTPClient:
                 row.get(csv_cfg["exch"]) == cfg["exch"]
                 and row.get(csv_cfg["seg"]) == cfg["seg"]
                 and row.get(csv_cfg["instr"]) == cfg["instr"]
-                and row.get(csv_cfg["series"]) == cfg["series"]
+                and (not cfg["series"] or row.get(csv_cfg["series"]) == cfg["series"])
             ):
                 results.append({
                     "security_id": row[csv_cfg["sid"]],
@@ -270,14 +275,26 @@ class MarketDataManager:
             return self._universe_cache
 
         all_stocks = []
+        fo_underlyings = set()
         for segment in CONFIG["market"]["segments"]:
             try:
                 stocks = await self.client.get_security_list(segment)
                 if isinstance(stocks, list):
-                    all_stocks.extend(stocks)
+                    if segment == "FO":
+                        for s in stocks:
+                            sym = self._extract_underlying(s.get("trading_symbol", ""))
+                            if sym:
+                                fo_underlyings.add(sym)
+                    else:
+                        all_stocks.extend(stocks)
             except Exception as e:
                 logger.warning(f"Failed to fetch {segment} list: {e}")
                 continue
+
+        if fo_underlyings:
+            eq_count = len(all_stocks)
+            all_stocks = [s for s in all_stocks if s.get("trading_symbol", "") in fo_underlyings]
+            logger.info(f"Filtered to {len(all_stocks)} F&O stocks (from {eq_count} EQ stocks, {len(fo_underlyings)} underlyings)")
 
         if not all_stocks:
             logger.warning("No data from Dhan API, using fallback universe")
