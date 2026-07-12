@@ -4,7 +4,7 @@ import asyncio
 import gc
 import sys
 import traceback
-from datetime import datetime
+from datetime import datetime, timezone, timedelta
 from pathlib import Path
 from typing import Any, Dict, List
 
@@ -28,6 +28,11 @@ from src.scanners.scanners import (
     TrendReversalScanner,
     VWAPReversalScanner,
 )
+
+
+IST = timezone(timedelta(hours=5, minutes=30))
+def ist_now() -> str:
+    return datetime.now(IST).strftime("%Y-%m-%d %H:%M:%S")
 
 
 def convert_val(v):
@@ -79,7 +84,7 @@ def scan_single():
 
         result = {
             "ticker": ticker,
-            "timestamp": datetime.now().strftime("%H:%M:%S"),
+            "timestamp": datetime.now(IST).strftime("%H:%M:%S"),
             "timeframes": {},
             "scanner_results": [],
         }
@@ -180,11 +185,15 @@ def scan_all():
         if df.empty:
             return jsonify({"error": "No universe data"}), 500
 
-        tickers = df["security_id"].tolist() if "security_id" in df.columns else df.index.tolist()
-        tickers = tickers[:CONFIG.get("scan_batch_size", 20)]
+        if "security_id" in df.columns and "trading_symbol" in df.columns:
+            ticker_map = dict(zip(df["security_id"].astype(str), df["trading_symbol"]))
+            security_ids = list(ticker_map.keys())
+        else:
+            ticker_map = {}
+            security_ids = df.index.tolist()
 
         manager = ScannerManager(market_data)
-        signals = run_async(manager.scan_all(tickers))
+        signals = run_async(manager.scan_all(security_ids, ticker_map))
 
         results = []
         for s in signals:
@@ -214,8 +223,8 @@ def scan_all():
         results.sort(key=lambda x: x.get("confidence", 0), reverse=True)
         return jsonify(convert_val({
             "count": len(results),
-            "signals": results[:20],
-            "timestamp": datetime.now().strftime("%H:%M:%S"),
+            "signals": results[:50],
+            "timestamp": ist_now(),
         }))
 
     except Exception as e:

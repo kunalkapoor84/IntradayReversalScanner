@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+import asyncio
+from datetime import datetime, timezone, timedelta
 from typing import Any, Dict, List, Optional
 
 import pandas as pd
@@ -16,6 +18,10 @@ from src.scanners.scanners import (
     TrendReversalScanner,
     VWAPReversalScanner,
 )
+
+
+def ist_now() -> str:
+    return datetime.now(timezone(timedelta(hours=5, minutes=30))).strftime("%Y-%m-%d %H:%M:%S")
 
 
 class ScannerManager:
@@ -40,30 +46,44 @@ class ScannerManager:
             return None
         return cls(ticker, tf_data, **kwargs)
 
-    async def scan_all(self, tickers: List[str]) -> List[Dict[str, Any]]:
+    async def scan_all(
+        self, security_ids: List[str], ticker_map: Dict[str, str] = None
+    ) -> List[Dict[str, Any]]:
         enabled_scanners = [
             stype for stype, cfg in self.scanner_config.items()
             if isinstance(cfg, dict) and cfg.get("enabled", False)
         ]
         self.all_results = []
+        ticker_map = ticker_map or {}
 
-        logger.info(f"Scanning {len(tickers)} tickers with {len(enabled_scanners)} scanners")
+        semaphore = asyncio.Semaphore(5)
+        logger.info(f"{ist_now()} | Scanning {len(security_ids)} tickers with {len(enabled_scanners)} scanners")
 
-        for ticker in tickers[:50]:  # batch of 50 per cycle
-            try:
-                tf_data = await self.market_data.get_multi_timeframe_data(
-                    ticker, CONFIG["timeframes"]
-                )
-                if not tf_data or all(df.empty for df in tf_data.values()):
-                    continue
+        async def _scan_one(sid: str) -> List[Dict[str, Any]]:
+            ticker = ticker_map.get(sid, sid)
+            async with semaphore:
+                try:
+                    tf_data = await self.market_data.get_multi_timeframe_data(
+                        sid, CONFIG["timeframes"]
+                    )
+                    if not tf_data or all(df.empty for df in tf_data.values()):
+                        return []
+                    results = self._scan_single(ticker, tf_data, enabled_scanners)
+                    for r in results:
+                        r["ticker"] = ticker
+                    return results
+                except Exception as e:
+                    logger.debug(f"Error scanning {ticker}: {e}")
+                    return []
 
-                results = self._scan_single(ticker, tf_data, enabled_scanners)
-                self.all_results.extend(results)
-            except Exception as e:
-                logger.debug(f"Error scanning {ticker}: {e}")
-                continue
+        task_results = await asyncio.gather(
+            *[_scan_one(sid) for sid in security_ids], return_exceptions=True
+        )
+        for res in task_results:
+            if isinstance(res, list):
+                self.all_results.extend(res)
 
-        logger.info(f"Generated {len(self.all_results)} signals")
+        logger.info(f"{ist_now()} | Generated {len(self.all_results)} signals")
         return self.all_results
 
     def _scan_single(
@@ -77,6 +97,7 @@ class ScannerManager:
             try:
                 result = scanner_class.scan()
                 if result is not None:
+                    result["ticker"] = ticker
                     results.append(result)
             except Exception as e:
                 logger.debug(f"Scanner {stype} error on {ticker}: {e}")
