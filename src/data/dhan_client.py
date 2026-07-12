@@ -217,13 +217,20 @@ class DhanHTTPClient:
             return []
 
         csv_cfg = self.CSVS["SE"]
-        try:
-            async with httpx.AsyncClient(timeout=60) as client:
-                resp = await client.get(csv_cfg["url"])
-                resp.raise_for_status()
-                content = resp.text
-        except Exception as e:
-            logger.error(f"Failed to download security list CSV: {e}")
+        content = None
+        for attempt in range(3):
+            try:
+                async with httpx.AsyncClient(timeout=120) as client:
+                    resp = await client.get(csv_cfg["url"])
+                    resp.raise_for_status()
+                    content = resp.text
+                    break
+            except Exception as e:
+                logger.warning(f"Failed to download CSV (attempt {attempt+1}/3): {e}")
+                if attempt < 2:
+                    await asyncio.sleep(5 * (attempt + 1))
+        if content is None:
+            logger.error("Failed to download security list CSV after 3 attempts")
             return []
 
         results = []
