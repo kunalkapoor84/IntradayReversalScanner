@@ -37,17 +37,16 @@ class DhanHTTPClient:
         self._last_request = 0.0
 
     async def _get_client(self) -> httpx.AsyncClient:
-        if self._client is not None:
-            await self._client.aclose()
-        self._client = httpx.AsyncClient(
-            base_url=self.base_url,
-            timeout=self.timeout,
-            headers={
-                "access-token": self.access_token,
-                "client-id": self.client_id,
-                "Content-Type": "application/json",
-            },
-        )
+        if self._client is None or self._client.is_closed:
+            self._client = httpx.AsyncClient(
+                base_url=self.base_url,
+                timeout=self.timeout,
+                headers={
+                    "access-token": self.access_token,
+                    "client-id": self.client_id,
+                    "Content-Type": "application/json",
+                },
+            )
         return self._client
 
     async def _request(self, method: str, endpoint: str, **kwargs) -> Dict[str, Any]:

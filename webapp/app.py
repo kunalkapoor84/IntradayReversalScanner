@@ -47,15 +47,17 @@ def convert_val(v):
 app = Flask(__name__)
 market_data = MarketDataManager()
 
+_loop = asyncio.new_event_loop()
+asyncio.set_event_loop(_loop)
+
+def run_async(coro):
+    return _loop.run_until_complete(coro)
+
 @app.after_request
 def cleanup(response):
     market_data.invalidate_cache()
     gc.collect()
     return response
-
-
-def run_async(coro):
-    return asyncio.run(coro)
 
 
 @app.route("/")

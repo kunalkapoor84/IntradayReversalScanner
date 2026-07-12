@@ -15,4 +15,4 @@ ENV PYTHONUNBUFFERED=1
 RUN mkdir -p logs webapp/logs
 
 WORKDIR /app/webapp
-CMD gunicorn --workers 1 --threads 2 --timeout 120 --max-requests 50 --max-requests-jitter 10 --bind 0.0.0.0:$PORT app:app
+CMD gunicorn --workers 1 --threads 1 --timeout 120 --max-requests 50 --max-requests-jitter 10 --bind 0.0.0.0:$PORT app:app
