@@ -163,8 +163,75 @@ class DhanHTTPClient:
         "FO": {"exch": "NSE", "seg": "D", "instr": "FUTSTK", "series": ""},
     }
 
+    NSE_FO_SECURITY_IDS = {
+        "ABB": "13", "ABBOTINDIA": "17903", "ABCAPITAL": "21614", "ABFRL": "30108",
+        "ACC": "22", "ADANIENT": "25", "ADANIGREEN": "3563", "ADANIPORTS": "15083",
+        "ADANIPOWER": "17388", "ADANITRANS": "18286", "AIAENG": "13086",
+        "AJANTPHARM": "8124", "ALEMBICLTD": "79", "ALKEM": "11703",
+        "ALKYLAMINE": "4487", "AMBER": "1185", "AMBUJACEM": "1270",
+        "ANGELONE": "324", "APLAPOLLO": "25780", "APOLLOHOSP": "157",
+        "APOLLOTYRE": "163", "ASHOKLEY": "212", "ASIANPAINT": "236",
+        "ASTRAL": "14418", "ATGL": "6066", "ATUL": "263", "AUBANK": "21238",
+        "AXISBANK": "5900", "BAJAJ-AUTO": "16669", "BAJAJFINSV": "16675",
+        "BAJFINANCE": "317", "BALKRISIND": "335", "BANDHANBNK": "2263",
+        "BANKBARODA": "4668", "BANKINDIA": "4745", "BATAINDIA": "371", "BEL": "383",
+        "BERGEPAINT": "404", "BHARATFORG": "422", "BHARTIARTL": "10604",
+        "BHEL": "438", "BIOCON": "11373", "BOSCHLTD": "2181", "BPCL": "526",
+        "BRITANNIA": "547", "CANBK": "10794", "CASTROLIND": "1250",
+        "CEATLTD": "15254", "CESC": "628", "CGPOWER": "760", "CHOLAFIN": "685",
+        "CIPLA": "694", "COALINDIA": "20374", "COFORGE": "11543", "COLPAL": "15141",
+        "CONCOR": "4749", "CROMPTON": "17094", "CUB": "5701", "CUMMINSIND": "1901",
+        "DABUR": "772", "DALBHARAT": "8075", "DEEPAKNTR": "19943",
+        "DELTACORP": "15044", "DIXON": "21690", "DLF": "14732", "DMART": "19913",
+        "DRREDDY": "881", "EICHERMOT": "910", "ESCORTS": "958", "EXIDEIND": "676",
+        "FEDERALBNK": "1023", "FORTIS": "14592", "GAIL": "4717", "GLENMARK": "7406",
+        "GMRINFRA": "1330", "GODREJCP": "10099", "GODREJPROP": "17875",
+        "GRANULES": "11872", "GRASIM": "1232", "GUJGASLTD": "11475", "HAL": "2303",
+        "HAVELLS": "9819", "HCLTECH": "7229", "HDFCAMC": "4244", "HDFCBANK": "1333",
+        "HDFCLIFE": "467", "HEROMOTOCO": "1348", "HEXAWARE": "11216",
+        "HINDALCO": "1363", "HINDPETRO": "1406", "HINDUNILVR": "1394",
+        "HUDCO": "20825", "IBULHSGFIN": "15285", "ICICIBANK": "4963",
+        "ICICIGI": "21770", "ICICIPRULI": "18652", "IDEA": "14366",
+        "IDFCFIRSTB": "11184", "IEX": "220", "IGL": "11262", "INDHOTEL": "1512",
+        "INDIAMART": "10726", "INDIGO": "11195", "INDUSINDBK": "5258",
+        "INDUSTOWER": "29135", "INFY": "1594", "IOC": "1624", "IPCA": "1642",
+        "IRB": "15313", "IRCTC": "13611", "IREDA": "20261", "ITC": "1660",
+        "JINDALSTEL": "6733", "JKCEMENT": "13270", "JSL": "11236",
+        "JSWENERGY": "17869", "JSWSTEEL": "11723", "JUBLFOOD": "18096",
+        "KOTAKBANK": "1922", "KPITTECH": "9683", "L&TFH": "16810",
+        "LALPATHLAB": "11654", "LAURUSLABS": "19234", "LT": "11483",
+        "LTIM": "5379", "LTTS": "18564", "LUPIN": "10440", "M&M": "2031",
+        "M&MFIN": "13285", "MANAPPURAM": "19061", "MARICO": "4067",
+        "MARUTI": "10999", "MAXHEALTH": "22377", "MCX": "31181",
+        "METROPOLIS": "9581", "MFSL": "2142", "MGL": "17534", "MOTHERSON": "4204",
+        "MPHASIS": "4503", "MRF": "2277", "MUTHOOTFIN": "23650",
+        "NATIONALUM": "6364", "NAUKRI": "13751", "NAVINFLUOR": "14672",
+        "NBCC": "31415", "NCC": "2319", "NESTLEIND": "17963", "NHPC": "17400",
+        "NMDC": "15332", "NTPC": "11630", "OBEROIRLTY": "20242", "OIL": "17438",
+        "ONGC": "2475", "PAGEIND": "14413", "PEL": "2220",
+        "PERSISTENT": "18365", "PETRONET": "11351", "PIDILITIND": "2664",
+        "PIIND": "24184", "PNB": "10666", "PNBHOUSING": "18908",
+        "POLICYBZR": "6656", "POLYCAB": "9590", "POWERGRID": "14977",
+        "PRAJIND": "2705", "PRESTIGE": "20302", "PVRINOX": "13147",
+        "RALLIS": "2816", "RAMCOCEM": "2043", "RBLBANK": "18391", "RCF": "2866",
+        "RECLTD": "15355", "RELIANCE": "2885", "SAIL": "2963", "SBICARD": "17971",
+        "SBILIFE": "21808", "SBIN": "3045", "SCHAEFFLER": "1011",
+        "SHREECEM": "3103", "SHRIRAMFIN": "4306", "SIEMENS": "3150", "SRF": "3273",
+        "SRTRANSFIN": "13857", "STAR": "7374", "SUNPHARMA": "3351",
+        "SUNTECK": "17641", "SUPREMEIND": "3363", "SYNGENE": "10243",
+        "TATACHEM": "3405", "TATACOMM": "3721", "TATAELXSI": "3411",
+        "TATAMOTORS": "3456", "TATAPOWER": "3426", "TATASTEEL": "3499",
+        "TATATECH": "20293", "TCS": "11536", "TECHM": "13538", "THERMAX": "3475",
+        "TITAN": "3506", "TORNTPHARM": "3518", "TORNTPOWER": "13786",
+        "TRENT": "1964", "TRIDENT": "9685", "TVSMOTOR": "8479", "UBL": "16713",
+        "ULTRACEMCO": "11532", "UNIONBANK": "10753", "UNOMINDA": "14154",
+        "UPL": "11287", "UTIAMC": "527", "VEDL": "3063", "VGUARD": "15362",
+        "VOLTAS": "3718", "WIPRO": "3787", "YESBANK": "11915", "ZEEL": "3812",
+        "ZENSARTECH": "1076", "ZOMATO": "912", "ZYDUSLIFE": "7929",
+    }  # 207 F&O symbols mapped to Dhan security IDs
+
     # Hardcoded list of NSE F&O stocks (same source as IntradayBreakoutScanner)
-    NSE_FO_STOCKS = [
+    NSE_FO_STOCKS = list(NSE_FO_SECURITY_IDS.keys())
         "ABB", "ABBOTINDIA", "ABCAPITAL", "ABFRL", "ACC", "ADANIENT", "ADANIGREEN",
         "ADANIPORTS", "ADANIPOWER", "ADANITRANS", "AUBANK", "AIAENG", "AJANTPHARM",
         "ALEMBICLTD", "ALKEM", "ALKYLAMINE", "AMBER", "AMBUJACEM", "ANGELONE",
@@ -321,22 +388,20 @@ class MarketDataManager:
         ):
             return self._universe_cache
 
-        all_stocks = []
-        for segment in CONFIG["market"]["segments"]:
-            if segment == "FO":
-                continue
-            try:
-                stocks = await self.client.get_security_list(segment)
-                if isinstance(stocks, list):
-                    all_stocks.extend(stocks)
-            except Exception as e:
-                logger.warning(f"Failed to fetch {segment} list: {e}")
-                continue
-
         fo_set = set(self.NSE_FO_STOCKS)
-        eq_count = len(all_stocks)
-        all_stocks = [s for s in all_stocks if s.get("trading_symbol", "") in fo_set]
-        logger.info(f"Filtered to {len(all_stocks)} F&O stocks (from {eq_count} EQ stocks, {len(fo_set)} underlyings)")
+        all_stocks = []
+        for sym in fo_set:
+            sid = self.NSE_FO_SECURITY_IDS.get(sym)
+            if sid:
+                all_stocks.append({
+                    "security_id": sid,
+                    "trading_symbol": sym,
+                    "name": "",
+                })
+        logger.info(f"Built universe of {len(all_stocks)} F&O stocks from hardcoded list")
+        if not all_stocks:
+            logger.error("Hardcoded F&O list is empty!")
+            return pd.DataFrame()
 
         if not all_stocks:
             logger.warning("No data from Dhan API, using fallback universe")
@@ -427,15 +492,7 @@ class MarketDataManager:
         return df
 
     async def resolve_ticker(self, trading_symbol: str) -> str | None:
-        try:
-            stocks = await self.client.get_security_list("EQ")
-            if isinstance(stocks, list):
-                for stock in stocks:
-                    if stock.get("trading_symbol", "").upper() == trading_symbol.upper():
-                        return stock["security_id"]
-        except Exception:
-            pass
-        return None
+        return self.client.NSE_FO_SECURITY_IDS.get(trading_symbol.upper())
 
     async def get_multi_timeframe_data(
         self, security_id: str, timeframes: List[Dict[str, Any]]
