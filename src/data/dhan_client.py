@@ -182,7 +182,7 @@ class DhanHTTPClient:
         "IDEA", "IDFCFIRSTB", "IEX", "IGL", "INDHOTEL", "INDIAMART", "INDIGO",
         "INDUSINDBK", "INDUSTOWER", "INFY", "IOC", "IPCA", "IRB", "IRCTC", "IREDA",
         "ITC", "JINDALSTEL", "JKCEMENT", "JSL", "JSWENERGY", "JSWSTEEL", "JUBLFOOD",
-        "KOTAKBANK", "KPITTECH", "L&TFH", "LALPATHLAB", "LAURUSLABS", "LT", "LTIM",
+        "KOTAKBANK", "KPITTECH", "L&TFH", "LALPATHLAB", "LAURUSLABS", "LT",
         "LTTS", "LUPIN", "M&M", "M&MFIN", "MANAPPURAM", "MARICO", "MARUTI",
         "MAXHEALTH", "MCX", "METROPOLIS", "MFSL", "MGL", "MOTHERSON", "MPHASIS",
         "MRF", "MUTHOOTFIN", "NATIONALUM", "NAUKRI", "NAVINFLUOR", "NBCC", "NCC",
@@ -191,12 +191,12 @@ class DhanHTTPClient:
         "POLICYBZR", "POLYCAB", "POWERGRID", "PRAJIND", "PRESTIGE", "PVRINOX",
         "RALLIS", "RAMCOCEM", "RBLBANK", "RCF", "RECLTD", "RELIANCE", "SAIL",
         "SBICARD", "SBILIFE", "SBIN", "SCHAEFFLER", "SHREECEM", "SHRIRAMFIN",
-        "SIEMENS", "SRF", "SRTRANSFIN", "STAR", "SUNPHARMA", "SUNTECK",
+        "SIEMENS", "SRF", "STAR", "SUNPHARMA", "SUNTECK",
         "SUPREMEIND", "SYNGENE", "TATACHEM", "TATACOMM", "TATAELXSI", "TATAMOTORS",
         "TATAPOWER", "TATASTEEL", "TATATECH", "TCS", "TECHM", "THERMAX", "TITAN",
         "TORNTPHARM", "TORNTPOWER", "TRENT", "TRIDENT", "TVSMOTOR", "UBL",
         "ULTRACEMCO", "UNIONBANK", "UNOMINDA", "UPL", "UTIAMC", "VEDL", "VGUARD",
-        "VOLTAS", "WIPRO", "YESBANK", "ZEEL", "ZENSARTECH", "ZOMATO", "ZYDUSLIFE",
+        "VOLTAS", "WIPRO", "YESBANK", "ZEEL", "ZENSARTECH", "ZYDUSLIFE",
     ]
 
     NSE_FO_SECURITY_IDS = {
@@ -386,10 +386,10 @@ class MarketDataManager:
         ):
             return self._universe_cache
 
-        fo_set = set(self.NSE_FO_STOCKS)
+        fo_set = set(self.client.NSE_FO_STOCKS)
         all_stocks = []
         for sym in fo_set:
-            sid = self.NSE_FO_SECURITY_IDS.get(sym)
+            sid = self.client.NSE_FO_SECURITY_IDS.get(sym)
             if sid:
                 all_stocks.append({
                     "security_id": sid,
