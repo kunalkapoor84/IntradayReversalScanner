@@ -196,7 +196,7 @@ class DhanHTTPClient:
         "TATAPOWER", "TATASTEEL", "TATATECH", "TCS", "TECHM", "THERMAX", "TITAN",
         "TORNTPHARM", "TORNTPOWER", "TRENT", "TRIDENT", "TVSMOTOR", "UBL",
         "ULTRACEMCO", "UNIONBANK", "UNOMINDA", "UPL", "UTIAMC", "VEDL", "VGUARD",
-        "VOLTAS", "WIPRO", "YESBANK", "ZEEL", "ZENSARTECH", "ZYDUSLIFE",
+        "VOLTAS", "WIPRO", "YESBANK", "ZEEL", "ZENSARTECH", "ZOMATO", "ZYDUSLIFE",
     ]
 
     NSE_FO_SECURITY_IDS = {
@@ -262,7 +262,7 @@ class DhanHTTPClient:
         "ULTRACEMCO": "11532", "UNIONBANK": "10753", "UNOMINDA": "14154",
         "UPL": "11287", "UTIAMC": "527", "VEDL": "3063", "VGUARD": "15362",
         "VOLTAS": "3718", "WIPRO": "3787", "YESBANK": "11915", "ZEEL": "3812",
-        "ZENSARTECH": "1076", "ZYDUSLIFE": "7929",
+        "ZENSARTECH": "1076", "ZYDUSLIFE": "7929", "ZOMATO": "5097", "ETERNAL": "5097",
     }
 
     @staticmethod
