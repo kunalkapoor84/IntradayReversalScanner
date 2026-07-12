@@ -1,0 +1,26 @@
+docker-compose.yml
+version: '3.8'
+
+services:
+  scanner:
+    build: .
+    container_name: intraday-scanner
+    restart: unless-stopped
+    env_file:
+      - .env
+    volumes:
+      - ./logs:/app/logs
+      - ./backtest_results:/app/backtest_results
+      - ./config:/app/config
+    environment:
+      - TZ=Asia/Kolkata
+    deploy:
+      resources:
+        limits:
+          memory: 4G
+          cpus: '2'
+    logging:
+      driver: "json-file"
+      options:
+        max-size: "10m"
+        max-file: "3"

@@ -1,0 +1,48 @@
+[build-system]
+requires = ["setuptools>=68.0", "wheel"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "intraday-reversal-scanner"
+version = "2.0.0"
+description = "Production-grade NSE intraday reversal and pullback scanner using Dhan API"
+requires-python = ">=3.12"
+authors = [
+    {name = "Quantitative Trading Team"},
+]
+dependencies = [
+    "dhanhq>=0.1.2",
+    "pandas>=2.1.0",
+    "numpy>=1.26.0",
+    "numba>=0.59.0",
+    "rich>=13.7.0",
+    "httpx>=0.26.0",
+    "websockets>=12.0",
+    "pydantic>=2.5.0",
+    "pydantic-settings>=2.1.0",
+    "pyyaml>=6.0.1",
+    "loguru>=0.7.2",
+    "asyncio>=3.4.3",
+    "tenacity>=8.2.3",
+    "python-telegram-bot>=20.7",
+    "discord-webhook>=1.3.1",
+    "slack-sdk>=3.27.0",
+    "plyer>=2.1.0",
+    "win10toast-click>=0.10",
+    "schedule>=1.2.0",
+    "ta>=0.10.2",
+    "scipy>=1.11.4",
+    "nsepy>=0.5.5",
+    "pytest>=7.4.0",
+    "pytest-asyncio>=0.23.0",
+    "pytest-cov>=4.1.0",
+    "orjson>=3.9.0",
+    "aiocache>=0.12.0",
+]
+
+[project.scripts]
+scanner = "src.main:run"
+
+[tool.pytest.ini_options]
+asyncio_mode = "auto"
+testpaths = ["tests"]

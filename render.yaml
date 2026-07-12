@@ -1,0 +1,11 @@
+services:
+  - type: web
+    name: intraday-reversal-scanner
+    runtime: python
+    buildCommand: pip install -r webapp/requirements.txt
+    startCommand: cd webapp && python app.py 5000
+    envVars:
+      - key: DHAN_CLIENT_ID
+        sync: false
+      - key: DHAN_ACCESS_TOKEN
+        sync: false

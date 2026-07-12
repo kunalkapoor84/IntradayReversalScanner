@@ -1,0 +1,302 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>Intraday Reversal Scanner</title>
+    <link rel="stylesheet" href="/static/style.css">
+</head>
+<body>
+    <div class="container">
+        <header>
+            <h1>Reversal Scanner</h1>
+            <span class="status" id="status">Ready</span>
+        </header>
+
+        <nav class="tabs">
+            <button class="tab active" data-tab="single">Single Ticker</button>
+            <button class="tab" data-tab="scan">Full Scan</button>
+        </nav>
+
+        <div class="tab-content active" id="tab-single">
+            <div class="card">
+                <div class="input-row" style="position:relative">
+                    <input type="text" id="tickerInput" placeholder="Enter ticker (e.g. RELIANCE)" autocomplete="off">
+                    <div id="suggestions" class="suggestions"></div>
+                    <button id="scanBtn" class="btn primary">Scan</button>
+                </div>
+            </div>
+            <div id="singleResults"></div>
+        </div>
+
+        <div class="tab-content" id="tab-scan">
+            <div class="card">
+                <button id="scanAllBtn" class="btn primary full">Scan Universe</button>
+                <div class="info-text">Scans top stocks for reversal signals</div>
+            </div>
+            <div id="scanAllResults"></div>
+        </div>
+    </div>
+
+    <script>
+        const API_BASE = '';
+
+        function $(id) { return document.getElementById(id); }
+        function qs(sel) { return document.querySelector(sel); }
+
+        // Tab switching
+        document.querySelectorAll('.tab').forEach(tab => {
+            tab.addEventListener('click', () => {
+                document.querySelectorAll('.tab').forEach(t => t.classList.remove('active'));
+                document.querySelectorAll('.tab-content').forEach(t => t.classList.remove('active'));
+                tab.classList.add('active');
+                $(`tab-${tab.dataset.tab}`).classList.add('active');
+            });
+        });
+
+        function setStatus(text, isError) {
+            const el = $('status');
+            el.textContent = text;
+            el.className = 'status' + (isError ? ' error' : '');
+        }
+
+        function showLoading(containerId) {
+            $(containerId).innerHTML = '<div class="loading"><div class="spinner"></div><span>Loading...</span></div>';
+        }
+
+        function fmt(val, decimals) {
+            if (val === undefined || val === null || val === 0) return '-';
+            return Number(val).toFixed(decimals || 2);
+        }
+
+        function fmtInt(val) {
+            if (!val) return '-';
+            if (val >= 10000000) return (val/10000000).toFixed(1) + 'Cr';
+            if (val >= 100000) return (val/100000).toFixed(1) + 'L';
+            if (val >= 1000) return (val/1000).toFixed(1) + 'K';
+            return val.toLocaleString();
+        }
+
+        function directionBadge(dir) {
+            if (!dir) return '';
+            const cls = dir === 'long' ? 'badge-green' : 'badge-red';
+            const sym = dir === 'long' ? '\u25B2' : '\u25BC';
+            return `<span class="badge ${cls}">${sym} ${dir.toUpperCase()}</span>`;
+        }
+
+        function qualityBadge(q) {
+            if (!q) return '';
+            const cls = q === 'A+' ? 'badge-gold' : q === 'A' ? 'badge-green' : q === 'B' ? 'badge-yellow' : 'badge-red';
+            return `<span class="badge ${cls}">${q}</span>`;
+        }
+
+        function buildTFTable(tfData) {
+            let html = '<div class="tf-grid">';
+            for (const [tf, d] of Object.entries(tfData)) {
+                if (d.error) {
+                    html += `<div class="tf-card"><div class="tf-title">${tf}</div><div class="error-text">${d.error}</div></div>`;
+                    continue;
+                }
+                html += `
+                    <div class="tf-card">
+                        <div class="tf-title">${tf}</div>
+                        <div class="tf-price">${fmt(d.close)}</div>
+                        <div class="tf-row"><span class="label">RSI</span><span class="val ${d.rsi > 70 ? 'red' : d.rsi < 30 ? 'green' : ''}">${fmt(d.rsi)}</span></div>
+                        <div class="tf-row"><span class="label">ADX</span><span class="val ${d.adx >= 25 ? 'green' : ''}">${fmt(d.adx)}</span></div>
+                        <div class="tf-row"><span class="label">ATR</span><span class="val">${fmt(d.atr, 4)}</span></div>
+                        <div class="tf-row"><span class="label">MACD</span><span class="val">${fmt(d.macd, 3)}</span></div>
+                        <div class="tf-row"><span class="label">Hist</span><span class="val ${d.macd_hist > 0 ? 'green' : 'red'}">${fmt(d.macd_hist, 3)}</span></div>
+                        <div class="tf-row"><span class="label">VWAP</span><span class="val">${fmt(d.vwap)}</span></div>
+                        <div class="tf-row"><span class="label">Vol</span><span class="val">${fmt(d.volume_ratio)}x ${d.is_spike ? '\u26A1' : ''}${d.is_climax ? '\uD83D\uDCA5' : ''}</span></div>
+                        <div class="tf-row"><span class="label">Bars</span><span class="val">${d.bars}</span></div>
+                    </div>
+                `;
+            }
+            html += '</div>';
+            return html;
+        }
+
+        function buildSignalCard(s) {
+            return `
+                <div class="signal-card ${s.direction}">
+                    <div class="signal-header">
+                        <span class="signal-ticker">${s.ticker}</span>
+                        ${directionBadge(s.direction)}
+                        ${qualityBadge(s.quality)}
+                        <span class="signal-conf">${s.confidence}%</span>
+                    </div>
+                    <div class="signal-body">
+                        <div class="signal-type">${s.signal}</div>
+                        <div class="signal-details">
+                            <span>Entry: ${fmt(s.entry)}</span>
+                            <span>Stop: ${fmt(s.stop_loss)}</span>
+                            <span>RR: ${s.risk_reward || '-'}</span>
+                        </div>
+                        ${s.targets ? `
+                        <div class="signal-targets">
+                            T1: ${fmt(s.targets.target_1)} | T2: ${fmt(s.targets.target_2)} | T3: ${fmt(s.targets.target_3)}
+                        </div>` : ''}
+                    </div>
+                </div>
+            `;
+        }
+
+        // Single ticker scan
+        $('scanBtn').addEventListener('click', async () => {
+            const ticker = $('tickerInput').value.trim().toUpperCase();
+            if (!ticker) return;
+            setStatus(`Scanning ${ticker}...`);
+            showLoading('singleResults');
+            $('scanBtn').disabled = true;
+
+            try {
+                const resp = await fetch(`${API_BASE}/api/scan_single`, {
+                    method: 'POST',
+                    headers: {'Content-Type': 'application/json'},
+                    body: JSON.stringify({ ticker })
+                });
+                const data = await resp.json();
+
+                if (data.error) {
+                    $('singleResults').innerHTML = `<div class="error-card">${data.error}</div>`;
+                    setStatus('Error', true);
+                    return;
+                }
+
+                let html = `<div class="card"><div class="section-title">${data.ticker} @ ${data.timestamp}</div>`;
+                html += buildTFTable(data.timeframes);
+                html += '</div>';
+
+                if (data.scanner_results && data.scanner_results.length > 0) {
+                    html += '<div class="card"><div class="section-title">Signals</div>';
+                    data.scanner_results.forEach(s => {
+                        if (s.error) {
+                            html += `<div class="error-card">${s.scanner}: ${s.error}</div>`;
+                        } else {
+                            html += buildSignalCard(s);
+                        }
+                    });
+                    html += '</div>';
+                } else {
+                    html += '<div class="card"><div class="no-signals">No signals detected</div></div>';
+                }
+
+                $('singleResults').innerHTML = html;
+                setStatus('Complete');
+            } catch (e) {
+                $('singleResults').innerHTML = `<div class="error-card">Network error: ${e.message}</div>`;
+                setStatus('Error', true);
+            } finally {
+                $('scanBtn').disabled = false;
+            }
+        });
+
+        // Ticker autocomplete
+        let searchTimeout = null;
+        let selectedSuggestion = -1;
+        const suggEl = $('suggestions');
+
+        $('tickerInput').addEventListener('input', () => {
+            clearTimeout(searchTimeout);
+            const val = $('tickerInput').value.trim();
+            if (val.length < 1) { suggEl.classList.remove('show'); return; }
+            searchTimeout = setTimeout(async () => {
+                try {
+                    const resp = await fetch(`${API_BASE}/api/search`, {
+                        method: 'POST',
+                        headers: {'Content-Type': 'application/json'},
+                        body: JSON.stringify({ query: val })
+                    });
+                    const data = await resp.json();
+                    if (data.results && data.results.length > 0) {
+                        suggEl.innerHTML = data.results.map((r, i) =>
+                            `<div class="suggestion-item" data-index="${i}" data-ticker="${r.ticker}">
+                                <span class="suggestion-ticker">${r.ticker}</span>
+                                <span class="suggestion-name">${r.name || ''}</span>
+                            </div>`
+                        ).join('');
+                        suggEl.classList.add('show');
+                        selectedSuggestion = -1;
+                    } else {
+                        suggEl.classList.remove('show');
+                    }
+                } catch (e) { suggEl.classList.remove('show'); }
+            }, 200);
+        });
+
+        $('tickerInput').addEventListener('keydown', (e) => {
+            const items = suggEl.querySelectorAll('.suggestion-item');
+            if (e.key === 'ArrowDown') {
+                e.preventDefault();
+                selectedSuggestion = Math.min(selectedSuggestion + 1, items.length - 1);
+                items.forEach((el, i) => el.classList.toggle('active', i === selectedSuggestion));
+            } else if (e.key === 'ArrowUp') {
+                e.preventDefault();
+                selectedSuggestion = Math.max(selectedSuggestion - 1, -1);
+                items.forEach((el, i) => el.classList.toggle('active', i === selectedSuggestion));
+            } else if (e.key === 'Enter') {
+                if (selectedSuggestion >= 0 && items[selectedSuggestion]) {
+                    $('tickerInput').value = items[selectedSuggestion].dataset.ticker;
+                    suggEl.classList.remove('show');
+                }
+                $('scanBtn').click();
+            } else if (e.key === 'Escape') {
+                suggEl.classList.remove('show');
+            }
+        });
+
+        suggEl.addEventListener('click', (e) => {
+            const item = e.target.closest('.suggestion-item');
+            if (item) {
+                $('tickerInput').value = item.dataset.ticker;
+                suggEl.classList.remove('show');
+                $('scanBtn').click();
+            }
+        });
+
+        document.addEventListener('click', (e) => {
+            if (!e.target.closest('.input-row')) suggEl.classList.remove('show');
+        });
+
+        // Full universe scan
+        $('scanAllBtn').addEventListener('click', async () => {
+            setStatus('Scanning universe...');
+            showLoading('scanAllResults');
+            $('scanAllBtn').disabled = true;
+
+            try {
+                const resp = await fetch(`${API_BASE}/api/scan_all`, {
+                    method: 'POST',
+                });
+                const data = await resp.json();
+
+                if (data.error) {
+                    $('scanAllResults').innerHTML = `<div class="error-card">${data.error}</div>`;
+                    setStatus('Error', true);
+                    return;
+                }
+
+                if (!data.signals || data.signals.length === 0) {
+                    $('scanAllResults').innerHTML = '<div class="card"><div class="no-signals">No signals found</div></div>';
+                    setStatus('Complete');
+                    return;
+                }
+
+                let html = `<div class="card">
+                    <div class="section-title">Signals (${data.count} found) @ ${data.timestamp}</div>`;
+                data.signals.forEach(s => {
+                    html += buildSignalCard(s);
+                });
+                html += '</div>';
+                $('scanAllResults').innerHTML = html;
+                setStatus('Complete');
+            } catch (e) {
+                $('scanAllResults').innerHTML = `<div class="error-card">Network error: ${e.message}</div>`;
+                setStatus('Error', true);
+            } finally {
+                $('scanAllBtn').disabled = false;
+            }
+        });
+    </script>
+</body>
+</html>
