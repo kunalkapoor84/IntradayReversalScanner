@@ -188,7 +188,11 @@ def scan_all():
             return jsonify({"error": "No universe data"}), 500
 
         if "security_id" in df.columns and "trading_symbol" in df.columns:
-            ticker_map = dict(zip(df["security_id"].astype(str), df["trading_symbol"]))
+            # deduplicate by security_id, preferring canonical name
+            ticker_map = {}
+            for sid, sym in zip(df["security_id"].astype(str), df["trading_symbol"]):
+                if sid not in ticker_map:
+                    ticker_map[sid] = sym
             if req_ids:
                 security_ids = [s for s in req_ids if s in ticker_map]
             else:

@@ -364,9 +364,11 @@ class MarketDataManager:
 
         fo_set = set(self.client.NSE_FO_STOCKS)
         all_stocks = []
-        for sym in fo_set:
+        seen_ids = set()
+        for sym in reversed(self.client.NSE_FO_STOCKS):
             sid = self.client.NSE_FO_SECURITY_IDS.get(sym)
-            if sid:
+            if sid and sid not in seen_ids:
+                seen_ids.add(sid)
                 all_stocks.append({
                     "security_id": sid,
                     "trading_symbol": sym,
