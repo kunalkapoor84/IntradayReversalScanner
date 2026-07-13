@@ -289,7 +289,7 @@ class BearishPullbackScanner(BaseScanner):
         body = abs(candle_1["close"] - candle_1["open"])
         rejects_higher = upper_wick > body * 0.5 if body > 0 else upper_wick > 0
 
-        if not (has_bearish_pattern or rejects_higher):
+        if not (has_bearish or rejects_higher):
             return None
 
         adx_5 = tf_5.get("adx", 0)
