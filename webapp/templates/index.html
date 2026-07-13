@@ -124,6 +124,7 @@
                         ${directionBadge(s.direction)}
                         ${qualityBadge(s.quality)}
                         <span class="signal-conf">${s.confidence}%</span>
+                        ${s.primary_timeframe ? `<span class="badge badge-tf">${s.primary_timeframe}</span>` : ''}
                     </div>
                     <div class="signal-body">
                         <div class="signal-type">${s.signal}</div>

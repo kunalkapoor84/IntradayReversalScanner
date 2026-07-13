@@ -191,7 +191,9 @@ input[type="text"]:focus {
 }
 
 .signal-card.long { border-left: 3px solid var(--green); }
+.signal-card.long .signal-type { color: var(--green); }
 .signal-card.short { border-left: 3px solid var(--red); }
+.signal-card.short .signal-type { color: var(--red); }
 
 .signal-header {
     display: flex;
@@ -213,8 +215,9 @@ input[type="text"]:focus {
 }
 
 .signal-type {
-    font-size: 13px;
-    color: var(--text-dim);
+    font-size: 14px;
+    font-weight: 700;
+    color: var(--text);
     margin-bottom: 6px;
 }
 
@@ -246,6 +249,7 @@ input[type="text"]:focus {
 .badge-red { background: rgba(239,68,68,0.15); color: var(--red); }
 .badge-gold { background: rgba(245,158,11,0.15); color: var(--gold); }
 .badge-yellow { background: rgba(234,179,8,0.15); color: #eab308; }
+.badge-tf { background: rgba(99,102,241,0.2); color: var(--accent); font-size: 10px; }
 
 /* Loading */
 .loading {

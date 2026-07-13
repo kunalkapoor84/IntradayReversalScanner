@@ -160,6 +160,7 @@ class BullishPullbackScanner(BaseScanner):
             "price": df_5["close"].iloc[-1],
             "scanner": "bullish_pullback",
             "sector": self.sector,
+            "primary_timeframe": "5m",
             "confidence": self._compute_confidence(tf_15, tf_5, tf_1, vol_5, has_smc_bullish),
             "timeframe_signals": {
                 "15m_trend": "bullish",
@@ -282,6 +283,7 @@ class BearishPullbackScanner(BaseScanner):
             "price": df_5["close"].iloc[-1],
             "scanner": "bearish_pullback",
             "sector": self.sector,
+            "primary_timeframe": "5m",
             "confidence": score,
             "timeframe_signals": {
                 "15m_trend": "bearish",
@@ -424,6 +426,7 @@ class ExhaustionReversalScanner(BaseScanner):
             "price": close_5,
             "scanner": "exhaustion_reversal",
             "sector": self.sector,
+            "primary_timeframe": "5m",
             "confidence": min(100, score),
             "timeframe_signals": {
                 "vol_climax": vol_climax,
@@ -570,6 +573,7 @@ class TrendReversalScanner(BaseScanner):
             "price": close_5,
             "scanner": "trend_reversal",
             "sector": self.sector,
+            "primary_timeframe": "5m",
             "confidence": min(100, score),
             "timeframe_signals": {
                 "bullish_cross": bullish_cross,
@@ -684,6 +688,7 @@ class VWAPReversalScanner(BaseScanner):
             "price": close_5,
             "scanner": "vwap_reversal",
             "sector": self.sector,
+            "primary_timeframe": "5m",
             "confidence": min(100, score),
             "timeframe_signals": {
                 "vwap_distance_atr": round(vwap_distance, 2),
@@ -805,6 +810,7 @@ class FailedBreakoutBreakdownBase(BaseScanner):
             "price": close_5,
             "scanner": self.scanner_type,
             "sector": self.sector,
+            "primary_timeframe": "5m",
             "confidence": min(100, score),
             "timeframe_signals": {
                 "broken_level": low_level if self.scanner_type == "failed_breakdown" else high_level,
