@@ -116,6 +116,41 @@
             return html;
         }
 
+        function buildLevelsHtml(levels, price) {
+            if (!levels || !levels.close) return '';
+            const above = [], below = [];
+            const labels = {
+                vwap: 'VWAP', ema_20: 'EMA 20',
+                orib_high: 'ORB High', orib_low: 'ORB Low',
+                yesterday_high: 'Yest High', yesterday_low: 'Yest Low',
+                week_high: 'Week High', week_low: 'Week Low',
+                swing_high: 'Swing High', swing_low: 'Swing Low',
+                today_high: 'Day High', today_low: 'Day Low',
+            };
+            for (const [k, v] of Object.entries(levels)) {
+                if (k === 'close' || !v) continue;
+                const label = labels[k] || k;
+                if (v > price) above.push({ label, val: v });
+                else if (v < price) below.push({ label, val: v });
+            }
+            above.sort((a, b) => a.val - b.val);
+            below.sort((a, b) => b.val - a.val);
+            let html = '<div class="sr-levels">';
+            if (above.length) {
+                html += '<div class="sr-group"><span class="sr-label">Resistance</span>';
+                above.forEach(r => { html += `<span class="sr-item sr-res">${r.label} ${fmt(r.val)}</span>`; });
+                html += '</div>';
+            }
+            html += `<div class="sr-price">${fmt(price)}</div>`;
+            if (below.length) {
+                html += '<div class="sr-group"><span class="sr-label">Support</span>';
+                below.forEach(r => { html += `<span class="sr-item sr-sup">${r.label} ${fmt(r.val)}</span>`; });
+                html += '</div>';
+            }
+            html += '</div>';
+            return html;
+        }
+
         function buildSignalCard(s) {
             return `
                 <div class="signal-card ${s.direction}">
@@ -133,6 +168,7 @@
                             <span>Stop: ${fmt(s.stop_loss)}</span>
                             <span>RR: ${s.risk_reward || '-'}</span>
                         </div>
+                        ${buildLevelsHtml(s.key_levels, s.entry)}
                         ${s.targets ? `
                         <div class="signal-targets">
                             T1: ${fmt(s.targets.target_1)} | T2: ${fmt(s.targets.target_2)} | T3: ${fmt(s.targets.target_3)}

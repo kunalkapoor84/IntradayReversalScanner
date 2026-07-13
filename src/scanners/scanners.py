@@ -51,6 +51,31 @@ class BaseScanner:
         smc = SmartMoneyConcepts(df)
         return smc.detect_all()
 
+    def _compute_key_levels(self, tf: str) -> Dict[str, float]:
+        df = self.timeframe_data.get(tf)
+        levels = {}
+        if df is None or len(df) < 20:
+            return levels
+        close = float(df["close"].iloc[-1])
+        levels["close"] = round(close, 2)
+        ind = self.indicators.get(tf, {})
+        levels["vwap"] = round(ind.get("vwap", 0), 2)
+        levels["ema_20"] = round(ind.get("ema_20", 0), 2)
+        levels["orib_high"] = round(float(df["high"].iloc[:5].max()), 2)
+        levels["orib_low"] = round(float(df["low"].iloc[:5].min()), 2)
+        levels["week_high"] = round(float(df["high"].tail(20).max()), 2)
+        levels["week_low"] = round(float(df["low"].tail(20).min()), 2)
+        levels["swing_high"] = round(float(df["high"].tail(10).max()), 2)
+        levels["swing_low"] = round(float(df["low"].tail(10).min()), 2)
+        if len(df) >= 390:
+            daily = df.resample("D").agg({"high": "max", "low": "min"})
+            if len(daily) >= 2:
+                levels["yesterday_high"] = round(float(daily["high"].iloc[-2]), 2)
+                levels["yesterday_low"] = round(float(daily["low"].iloc[-2]), 2)
+            levels["today_high"] = round(float(daily["high"].iloc[-1]), 2)
+            levels["today_low"] = round(float(daily["low"].iloc[-1]), 2)
+        return levels
+
     def scan(self) -> Optional[Dict[str, Any]]:
         raise NotImplementedError
 
@@ -153,6 +178,7 @@ class BullishPullbackScanner(BaseScanner):
         if adx_5 < CONFIG["trend_filter"]["min_adx"]:
             return None
 
+        levels = self._compute_key_levels("5m")
         return {
             "ticker": self.ticker,
             "signal": "Bullish Pullback",
@@ -161,6 +187,7 @@ class BullishPullbackScanner(BaseScanner):
             "scanner": "bullish_pullback",
             "sector": self.sector,
             "primary_timeframe": "5m",
+            "key_levels": levels,
             "confidence": self._compute_confidence(tf_15, tf_5, tf_1, vol_5, has_smc_bullish),
             "timeframe_signals": {
                 "15m_trend": "bullish",
@@ -276,6 +303,7 @@ class BearishPullbackScanner(BaseScanner):
         if score < CONFIG["scanners"]["bearish_pullback"]["min_confidence"]:
             return None
 
+        levels = self._compute_key_levels("5m")
         return {
             "ticker": self.ticker,
             "signal": "Bearish Pullback",
@@ -284,6 +312,7 @@ class BearishPullbackScanner(BaseScanner):
             "scanner": "bearish_pullback",
             "sector": self.sector,
             "primary_timeframe": "5m",
+            "key_levels": levels,
             "confidence": score,
             "timeframe_signals": {
                 "15m_trend": "bearish",
@@ -419,6 +448,7 @@ class ExhaustionReversalScanner(BaseScanner):
         if score < CONFIG["scanners"]["exhaustion_reversal"]["min_confidence"]:
             return None
 
+        levels = self._compute_key_levels("5m")
         return {
             "ticker": self.ticker,
             "signal": signal_type,
@@ -427,6 +457,7 @@ class ExhaustionReversalScanner(BaseScanner):
             "scanner": "exhaustion_reversal",
             "sector": self.sector,
             "primary_timeframe": "5m",
+            "key_levels": levels,
             "confidence": min(100, score),
             "timeframe_signals": {
                 "vol_climax": vol_climax,
@@ -566,6 +597,7 @@ class TrendReversalScanner(BaseScanner):
         if score < CONFIG["scanners"]["trend_reversal"]["min_confidence"]:
             return None
 
+        kl = self._compute_key_levels("5m")
         return {
             "ticker": self.ticker,
             "signal": signal_type,
@@ -574,6 +606,7 @@ class TrendReversalScanner(BaseScanner):
             "scanner": "trend_reversal",
             "sector": self.sector,
             "primary_timeframe": "5m",
+            "key_levels": kl,
             "confidence": min(100, score),
             "timeframe_signals": {
                 "bullish_cross": bullish_cross,
@@ -681,6 +714,7 @@ class VWAPReversalScanner(BaseScanner):
         if score < CONFIG["scanners"]["vwap_reversal"]["min_confidence"]:
             return None
 
+        kl = self._compute_key_levels("5m")
         return {
             "ticker": self.ticker,
             "signal": signal_type,
@@ -689,6 +723,7 @@ class VWAPReversalScanner(BaseScanner):
             "scanner": "vwap_reversal",
             "sector": self.sector,
             "primary_timeframe": "5m",
+            "key_levels": kl,
             "confidence": min(100, score),
             "timeframe_signals": {
                 "vwap_distance_atr": round(vwap_distance, 2),
@@ -803,6 +838,7 @@ class FailedBreakoutBreakdownBase(BaseScanner):
         if score < CONFIG["scanners"].get(self.scanner_type, {}).get("min_confidence", 75):
             return None
 
+        kl = self._compute_key_levels("5m")
         return {
             "ticker": self.ticker,
             "signal": signal_type,
@@ -811,6 +847,7 @@ class FailedBreakoutBreakdownBase(BaseScanner):
             "scanner": self.scanner_type,
             "sector": self.sector,
             "primary_timeframe": "5m",
+            "key_levels": kl,
             "confidence": min(100, score),
             "timeframe_signals": {
                 "broken_level": low_level if self.scanner_type == "failed_breakdown" else high_level,
