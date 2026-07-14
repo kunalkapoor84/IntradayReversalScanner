@@ -47,7 +47,7 @@ class ScannerManager:
         return cls(ticker, tf_data, **kwargs)
 
     async def scan_all(
-        self, security_ids: List[str], ticker_map: Dict[str, str] = None
+        self, security_ids: List[str], ticker_map: Dict[str, str] = None, limit: int = 0
     ) -> List[Dict[str, Any]]:
         enabled_scanners = [
             stype for stype, cfg in self.scanner_config.items()
@@ -56,15 +56,20 @@ class ScannerManager:
         self.all_results = []
         ticker_map = ticker_map or {}
 
-        semaphore = asyncio.Semaphore(10)
+        if limit and len(security_ids) > limit:
+            security_ids = security_ids[:limit]
+            logger.info(f"{ist_now()} | Limited to {limit} tickers")
+
+        semaphore = asyncio.Semaphore(1)
         logger.info(f"{ist_now()} | Scanning {len(security_ids)} tickers with {len(enabled_scanners)} scanners")
 
         async def _scan_one(sid: str) -> List[Dict[str, Any]]:
             ticker = ticker_map.get(sid, sid)
             async with semaphore:
                 try:
+                    bulk_tfs = [tf for tf in CONFIG["timeframes"] if tf["interval"] != "1m"]
                     tf_data = await self.market_data.get_multi_timeframe_data(
-                        sid, CONFIG["timeframes"]
+                        sid, bulk_tfs
                     )
                     if not tf_data or all(df.empty for df in tf_data.values()):
                         return []
@@ -98,6 +103,9 @@ class ScannerManager:
                 result = scanner_class.scan()
                 if result is not None:
                     result["ticker"] = ticker
+                    if "5m" in scanner_class.indicators:
+                        result["vwap_5"] = scanner_class.indicators["5m"].get("vwap", 0)
+                        result["close_5"] = scanner_class.indicators["5m"].get("close", 0)
                     results.append(result)
             except Exception as e:
                 logger.debug(f"Scanner {stype} error on {ticker}: {e}")

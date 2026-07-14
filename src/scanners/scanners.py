@@ -39,7 +39,9 @@ class BaseScanner:
         self.indicators[tf] = engine.get_current()
         self.indicators[tf]["close"] = float(df["close"].iloc[-1])
         pat = CandlestickPatternDetector(df)
-        self.patterns[tf] = pat.detect_all()
+        current_pats = pat.detect_all(-1)
+        prev_pats = pat.detect_all(-2) if len(df) > 2 else []
+        self.patterns[tf] = list(set(current_pats + prev_pats))
         vol = VolumeAnalyzer(df)
         self.volume_analysis[tf] = vol.get_analysis()
         return self.indicators[tf]
@@ -76,6 +78,23 @@ class BaseScanner:
             levels["today_low"] = round(float(daily["low"].iloc[-1]), 2)
         return levels
 
+    def _is_near_key_level(self, levels: Dict[str, float], price: float, atr: float, direction: str) -> bool:
+        if not levels or not price:
+            return True
+        support_keys = ["orib_low", "yesterday_low", "week_low", "swing_low", "today_low", "ema_20"]
+        resistance_keys = ["orib_high", "yesterday_high", "week_high", "swing_high", "today_high", "ema_20"]
+        threshold_pct = 0.5
+        threshold_atr = 0.5
+        keys = support_keys if direction == "long" else resistance_keys
+        for key in keys:
+            val = levels.get(key)
+            if val and val > 0:
+                dist_pct = abs(price - val) / price * 100
+                dist_atr = abs(price - val) / atr if atr > 0 else 999
+                if dist_pct < threshold_pct or dist_atr < threshold_atr:
+                    return True
+        return False
+
     def scan(self) -> Optional[Dict[str, Any]]:
         raise NotImplementedError
 
@@ -84,21 +103,21 @@ class BullishPullbackScanner(BaseScanner):
     """Scanner Type 1: Bullish Pullback - strong rally, pullback to support, resume uptrend"""
 
     def scan(self) -> Optional[Dict[str, Any]]:
-        for tf in ("15m", "5m", "1m"):
+        for tf in ("15m", "5m"):
             self._compute_indicators_for_tf(tf)
         tf_15 = self.indicators.get("15m", {})
         tf_5 = self.indicators.get("5m", {})
         tf_1 = self.indicators.get("1m", {})
-        if not tf_15 or not tf_5 or not tf_1:
+        if not tf_15 or not tf_5:
             return None
 
         df_5 = self.timeframe_data.get("5m")
         df_1 = self.timeframe_data.get("1m")
-        if df_5 is None or df_1 is None or len(df_5) < 50 or len(df_1) < 50:
+        if df_5 is None or len(df_5) < 50:
             return None
 
-        close_1 = df_1["close"].iloc[-1]
         close_5 = df_5["close"].iloc[-1]
+        close_1 = df_1["close"].iloc[-1] if df_1 is not None else close_5
 
         # Higher timeframe bullish check
         ema_20_15, ema_50_15, ema_200_15 = (
@@ -108,19 +127,24 @@ class BullishPullbackScanner(BaseScanner):
         )
         vwap_15 = tf_15.get("vwap", 0)
         vwap_5 = tf_5.get("vwap", 0)
-        vwap_1 = tf_1.get("vwap", 0)
+        vwap_1 = tf_1.get("vwap", 0) if tf_1 else 0
 
-        if not (ema_20_15 > ema_50_15 > ema_200_15 and close_5 > vwap_15 and close_1 > vwap_15):
+        if not (ema_20_15 > ema_50_15 > ema_200_15 and close_5 > vwap_15):
             return None
 
         # Price above key EMAs on 5m
         ema_20_5, ema_50_5 = tf_5.get("ema_20", 0), tf_5.get("ema_50", 0)
-        if not (close_5 > ema_20_5 > ema_50_5 and close_1 > vwap_1 > 0 and close_1 > ema_20_5):
+        if not (close_5 > ema_20_5 > ema_50_5):
+            return None
+        if df_1 is not None and not (close_1 > vwap_1 > 0 and close_1 > ema_20_5):
             return None
 
         # RSI check
-        rsi_5, rsi_1 = tf_5.get("rsi", 50), tf_1.get("rsi", 50)
-        if not (rsi_5 > 45 and rsi_1 > 45):
+        rsi_5 = tf_5.get("rsi", 50)
+        rsi_1 = tf_1.get("rsi", 50) if tf_1 else 50
+        if not (rsi_5 > 45):
+            return None
+        if df_1 is not None and not (rsi_1 > 45):
             return None
 
         macd_hist_5 = tf_5.get("macd_hist", 0)
@@ -128,44 +152,23 @@ class BullishPullbackScanner(BaseScanner):
         if not (macd_hist_5 > 0 and macd_line_5 > macd_signal_5):
             return None
 
-        macd_hist_contracting = True
-        if len(df_5) >= 4:
-            hist_vals = []
-            for offset in range(3):
-                idx = len(df_5) - 1 - offset
-                if idx >= 0:
-                    sub_df = df_5.iloc[:idx+1]
-                    if len(sub_df) > 30:
-                        sub_engine = IndicatorEngine(sub_df)
-                        sub_engine.compute_all()
-                        sub_hist = sub_engine.computed.get("macd_hist")
-                        if sub_hist is not None and not sub_hist.empty:
-                            hist_vals.append(float(sub_hist.iloc[-1]))
-            if len(hist_vals) >= 3:
-                macd_hist_contracting = hist_vals[-1] <= hist_vals[-2] <= hist_vals[-3]
-            else:
-                macd_hist_contracting = True
-
-        # Volume check: pullback volume should decrease
-        vol_5 = self.volume_analysis.get("5m", {})
-        if vol_5.get("volume_ratio", 1) > 0.9:
-            pass
-
         # Candlestick pattern check on 1m for entry candle
-        pat_1 = self.patterns.get("1m", [])
-        bullish_patterns = {"hammer", "bullish_engulfing", "tweezer_bottom", "pin_bar", "marubozu"}
-        has_bullish_pattern = any(p in bullish_patterns for p in pat_1)
+        has_entry_confirmation = True
+        if df_1 is not None:
+            pat_1 = self.patterns.get("1m", [])
+            bullish_patterns = {"hammer", "bullish_engulfing", "tweezer_bottom", "pin_bar", "marubozu"}
+            has_bullish_pattern = any(p in bullish_patterns for p in pat_1)
+            candle_1 = df_1.iloc[-1]
+            lower_wick = min(candle_1["close"], candle_1["open"]) - candle_1["low"]
+            body = abs(candle_1["close"] - candle_1["open"])
+            rejects_lower = lower_wick > body * 0.5 if body > 0 else lower_wick > 0
+            has_entry_confirmation = has_bullish_pattern or rejects_lower
 
-        # Entry candle must reject lower prices
-        candle_1 = df_1.iloc[-1]
-        lower_wick = min(candle_1["close"], candle_1["open"]) - candle_1["low"]
-        body = abs(candle_1["close"] - candle_1["open"])
-        rejects_lower = lower_wick > body * 0.5 if body > 0 else lower_wick > 0
-
-        if not (has_bullish_pattern or rejects_lower):
+        if not has_entry_confirmation:
             return None
 
         # Volume confirmation on entry
+        vol_5 = self.volume_analysis.get("5m", {})
         vol_ratio = vol_5.get("volume_ratio", 1)
         if vol_ratio < 0.5:
             return None
@@ -179,6 +182,8 @@ class BullishPullbackScanner(BaseScanner):
             return None
 
         levels = self._compute_key_levels("5m")
+        if not self._is_near_key_level(levels, close_5, tf_5.get("atr", 0), "long"):
+            return None
         return {
             "ticker": self.ticker,
             "signal": "Bullish Pullback",
@@ -192,7 +197,7 @@ class BullishPullbackScanner(BaseScanner):
             "timeframe_signals": {
                 "15m_trend": "bullish",
                 "5m_patterns": self.patterns.get("5m", []),
-                "1m_patterns": pat_1,
+                "1m_patterns": self.patterns.get("1m", []),
                 "smc": smc,
             },
             "indicators": {
@@ -206,7 +211,7 @@ class BullishPullbackScanner(BaseScanner):
             },
             "volume": vol_5,
             "vwap_distance_5": self._vwap_distance(close_5, vwap_5),
-            "vwap_distance_1": self._vwap_distance(close_1, vwap_1),
+            "vwap_distance_1": self._vwap_distance(close_1, vwap_1) if df_1 is not None else 0,
         }
 
     def _vwap_distance(self, price: float, vwap: float) -> float:
@@ -243,20 +248,21 @@ class BearishPullbackScanner(BaseScanner):
     """Scanner Type 2: Bearish Pullback - strong selloff, pullback rally, sell into strength"""
 
     def scan(self) -> Optional[Dict[str, Any]]:
-        for tf in ("15m", "5m", "1m"):
+        for tf in ("15m", "5m"):
             self._compute_indicators_for_tf(tf)
         tf_15 = self.indicators.get("15m", {})
         tf_5 = self.indicators.get("5m", {})
         tf_1 = self.indicators.get("1m", {})
-        if not tf_15 or not tf_5 or not tf_1:
+        if not tf_15 or not tf_5:
             return None
 
         df_5 = self.timeframe_data.get("5m")
         df_1 = self.timeframe_data.get("1m")
-        if df_5 is None or df_1 is None or len(df_5) < 50 or len(df_1) < 50:
+        if df_5 is None or len(df_5) < 50:
             return None
 
-        close_1, close_5 = df_1["close"].iloc[-1], df_5["close"].iloc[-1]
+        close_5 = df_5["close"].iloc[-1]
+        close_1 = df_1["close"].iloc[-1] if df_1 is not None else close_5
 
         ema_20_15, ema_50_15, ema_200_15 = (
             tf_15.get("ema_20", 0),
@@ -264,15 +270,18 @@ class BearishPullbackScanner(BaseScanner):
             tf_15.get("ema_200", 0),
         )
         vwap_15 = tf_15.get("vwap", 0)
-        if not (ema_20_15 < ema_50_15 < ema_200_15 and close_5 < vwap_15 and close_1 < vwap_15):
+        if not (ema_20_15 < ema_50_15 < ema_200_15 and close_5 < vwap_15):
             return None
 
         ema_20_5, ema_50_5 = tf_5.get("ema_20", 0), tf_5.get("ema_50", 0)
-        if not (close_5 < ema_20_5 < ema_50_5 and close_1 < vwap_15):
+        if not (close_5 < ema_20_5 < ema_50_5):
             return None
 
-        rsi_5, rsi_1 = tf_5.get("rsi", 50), tf_1.get("rsi", 50)
-        if not (rsi_5 < 55 and rsi_1 < 55):
+        rsi_5 = tf_5.get("rsi", 50)
+        rsi_1 = tf_1.get("rsi", 50) if tf_1 else 50
+        if not (rsi_5 < 55):
+            return None
+        if df_1 is not None and not (rsi_1 < 55):
             return None
 
         macd_hist_5 = tf_5.get("macd_hist", 0)
@@ -280,16 +289,18 @@ class BearishPullbackScanner(BaseScanner):
         if not (macd_hist_5 < 0 and macd_line_5 < macd_signal_5):
             return None
 
-        pat_1 = self.patterns.get("1m", [])
-        bearish_patterns = {"shooting_star", "bearish_engulfing", "tweezer_top", "pin_bar"}
-        has_bearish = any(p in bearish_patterns for p in pat_1)
+        has_entry_confirmation = True
+        if df_1 is not None:
+            pat_1 = self.patterns.get("1m", [])
+            bearish_patterns = {"shooting_star", "bearish_engulfing", "tweezer_top", "pin_bar"}
+            has_bearish = any(p in bearish_patterns for p in pat_1)
+            candle_1 = df_1.iloc[-1]
+            upper_wick = candle_1["high"] - max(candle_1["close"], candle_1["open"])
+            body = abs(candle_1["close"] - candle_1["open"])
+            rejects_higher = upper_wick > body * 0.5 if body > 0 else upper_wick > 0
+            has_entry_confirmation = has_bearish or rejects_higher
 
-        candle_1 = df_1.iloc[-1]
-        upper_wick = candle_1["high"] - max(candle_1["close"], candle_1["open"])
-        body = abs(candle_1["close"] - candle_1["open"])
-        rejects_higher = upper_wick > body * 0.5 if body > 0 else upper_wick > 0
-
-        if not (has_bearish or rejects_higher):
+        if not has_entry_confirmation:
             return None
 
         adx_5 = tf_5.get("adx", 0)
@@ -304,6 +315,8 @@ class BearishPullbackScanner(BaseScanner):
             return None
 
         levels = self._compute_key_levels("5m")
+        if not self._is_near_key_level(levels, close_5, tf_5.get("atr", 0), "short"):
+            return None
         return {
             "ticker": self.ticker,
             "signal": "Bearish Pullback",
@@ -317,7 +330,7 @@ class BearishPullbackScanner(BaseScanner):
             "timeframe_signals": {
                 "15m_trend": "bearish",
                 "5m_patterns": self.patterns.get("5m", []),
-                "1m_patterns": pat_1,
+                "1m_patterns": self.patterns.get("1m", []),
                 "smc": smc,
             },
             "indicators": {
@@ -355,25 +368,23 @@ class ExhaustionReversalScanner(BaseScanner):
     """Scanner Type 3: Exhaustion Reversal - panic selloff climax -> reversal"""
 
     def scan(self) -> Optional[Dict[str, Any]]:
-        for tf in ("15m", "5m", "1m"):
+        for tf in ("15m", "5m"):
             self._compute_indicators_for_tf(tf)
         tf_15 = self.indicators.get("15m", {})
         tf_5 = self.indicators.get("5m", {})
         tf_1 = self.indicators.get("1m", {})
-        if not tf_15 or not tf_5 or not tf_1:
+        if not tf_15 or not tf_5:
             return None
 
         df_5 = self.timeframe_data.get("5m")
         df_1 = self.timeframe_data.get("1m")
-        if df_5 is None or df_1 is None or len(df_5) < 60 or len(df_1) < 30:
+        if df_5 is None or len(df_5) < 60:
             return None
 
-        close_1 = df_1["close"].iloc[-1]
         close_5 = df_5["close"].iloc[-1]
 
         # Detect selling exhaustion on 5m
         vol_5 = self.volume_analysis.get("5m", {})
-        idx = len(df_5) - 1
 
         vol_climax = vol_5.get("is_climax", False)
 
@@ -386,21 +397,27 @@ class ExhaustionReversalScanner(BaseScanner):
             selloff_pct = abs(selloff_end - selloff_start) / selloff_start * 100
 
         vwap_5 = tf_5.get("vwap", 0)
-        vwap_1 = tf_1.get("vwap", 0)
         atr_5 = tf_5.get("atr", 0)
 
         vwap_deviation = abs(close_5 - vwap_5) / atr_5 if atr_5 > 0 else 0
 
-        candle_1 = df_1.iloc[-1]
-        lower_wick = min(candle_1["close"], candle_1["open"]) - candle_1["low"]
-        body = abs(candle_1["close"] - candle_1["open"])
-
-        has_long_lower_wick = lower_wick > body * 2 if body > 0 else (lower_wick > 0)
+        has_long_lower_wick = False
+        has_long_upper_wick = False
         pat_1 = self.patterns.get("1m", [])
-
         bullish_reversal = any(
             p in pat_1 for p in ["hammer", "bullish_engulfing", "morning_star", "tweezer_bottom", "pin_bar"]
         )
+        bearish_reversal = any(
+            p in pat_1 for p in ["shooting_star", "bearish_engulfing", "evening_star", "tweezer_top"]
+        )
+
+        if df_1 is not None:
+            candle_1 = df_1.iloc[-1]
+            body = abs(candle_1["close"] - candle_1["open"])
+            lower_wick = min(candle_1["close"], candle_1["open"]) - candle_1["low"]
+            has_long_lower_wick = lower_wick > body * 2 if body > 0 else (lower_wick > 0)
+            upper_wick = candle_1["high"] - max(candle_1["close"], candle_1["open"])
+            has_long_upper_wick = upper_wick > body * 2 if body > 0 else (upper_wick > 0)
 
         be_bullish = False
         be_bearish = False
@@ -410,26 +427,19 @@ class ExhaustionReversalScanner(BaseScanner):
             return None
 
         rsi_5 = tf_5.get("rsi", 50)
-        rsi_1 = tf_1.get("rsi", 50)
+        rsi_1 = tf_1.get("rsi", 50) if tf_1 else 50
         rsi_divergence_bullish = False
         if len(df_5) >= 10:
             low_5 = df_5["low"].iloc[-10:].min()
             if close_5 > low_5 * 1.02 and rsi_5 > 30:
                 rsi_divergence_bullish = True
 
-        macd_1 = tf_1.get("macd", 0)
-        macd_signal_1 = tf_1.get("macd_signal", 0)
-
         if (vol_climax or selloff_pct >= 3) and (bullish_reversal or has_long_lower_wick or rsi_divergence_bullish):
             be_bullish = True
 
         has_rally = (df_5.iloc[-5:]["close"] > df_5.iloc[-5:]["open"]).sum() >= 3
-        upper_wick = candle_1["high"] - max(candle_1["close"], candle_1["open"])
-        has_long_upper_wick = upper_wick > body * 2 if body > 0 else (upper_wick > 0)
-        bearish_reversal = any(p in pat_1 for p in ["shooting_star", "bearish_engulfing", "evening_star", "tweezer_top"])
         rsi_divergence_bearish = rsi_5 > 70 and close_5 < df_5["high"].iloc[-10:].max()
 
-        has_vol_climax_up = False
         if has_rally and (bearish_reversal or has_long_upper_wick or rsi_divergence_bearish):
             be_bearish = True
 
@@ -449,6 +459,8 @@ class ExhaustionReversalScanner(BaseScanner):
             return None
 
         levels = self._compute_key_levels("5m")
+        if not self._is_near_key_level(levels, close_5, atr_5, direction):
+            return None
         return {
             "ticker": self.ticker,
             "signal": signal_type,
@@ -475,12 +487,11 @@ class TrendReversalScanner(BaseScanner):
     """Scanner Type 4: Trend Reversal - EMA crossover, VWAP reclaim, structure change"""
 
     def scan(self) -> Optional[Dict[str, Any]]:
-        for tf in ("15m", "5m", "1m"):
+        for tf in ("15m", "5m"):
             self._compute_indicators_for_tf(tf)
         tf_15 = self.indicators.get("15m", {})
         tf_5 = self.indicators.get("5m", {})
-        tf_1 = self.indicators.get("1m", {})
-        if not tf_15 or not tf_5 or not tf_1:
+        if not tf_15 or not tf_5:
             return None
 
         df_5 = self.timeframe_data.get("5m")
@@ -598,6 +609,8 @@ class TrendReversalScanner(BaseScanner):
             return None
 
         kl = self._compute_key_levels("5m")
+        if not self._is_near_key_level(kl, close_5, tf_5.get("atr", 0), direction):
+            return None
         return {
             "ticker": self.ticker,
             "signal": signal_type,
@@ -633,16 +646,16 @@ class VWAPReversalScanner(BaseScanner):
     """Scanner Type 5: VWAP Reversal - price stretched from VWAP, reversal"""
 
     def scan(self) -> Optional[Dict[str, Any]]:
-        for tf in ("15m", "5m", "1m"):
+        for tf in ("15m", "5m"):
             self._compute_indicators_for_tf(tf)
         tf_5 = self.indicators.get("5m", {})
         tf_1 = self.indicators.get("1m", {})
-        if not tf_5 or not tf_1:
+        if not tf_5:
             return None
 
         df_5 = self.timeframe_data.get("5m")
         df_1 = self.timeframe_data.get("1m")
-        if df_5 is None or df_1 is None or len(df_5) < 30:
+        if df_5 is None or len(df_5) < 30:
             return None
 
         close_5 = df_5["close"].iloc[-1]
@@ -660,61 +673,64 @@ class VWAPReversalScanner(BaseScanner):
         if vwap_distance < 2.0:
             return None
 
-        # Check reversal candle
-        candle_1 = df_1.iloc[-1]
-        pat_1 = self.patterns.get("1m", [])
-
         # Volume climax
         vol_5 = self.volume_analysis.get("5m", {})
         volume_climax = vol_5.get("is_climax", False)
 
         # MACD turn
         macd_hist_5 = tf_5.get("macd_hist", 0)
-        macd_1 = tf_1.get("macd", 0)
-        macd_signal_1 = tf_1.get("macd_signal", 0)
 
-        # Price closing back towards VWAP
-        body_dir = candle_1["close"] - candle_1["open"]
-        moving_toward_vwap = (close_5 < vwap_5 and body_dir > 0) or (close_5 > vwap_5 and body_dir < 0)
+        # Check reversal candle
+        pat_1 = self.patterns.get("1m", [])
+        has_entry_confirmation = False
+        moving_toward_vwap = False
 
-        # Reversal pattern check
-        if close_5 < vwap_5:
-            # Bullish VWAP reversal
-            bullish_reversal = any(
-                p in pat_1 for p in ["hammer", "bullish_engulfing", "tweezer_bottom", "pin_bar", "marubozu"]
-            )
-            lower_wick = min(candle_1["close"], candle_1["open"]) - candle_1["low"]
-            body = abs(candle_1["close"] - candle_1["open"])
-            has_long_wick = lower_wick > body * 1.5 if body > 0 else False
+        if df_1 is not None:
+            candle_1 = df_1.iloc[-1]
+            body_dir = candle_1["close"] - candle_1["open"]
+            moving_toward_vwap = (close_5 < vwap_5 and body_dir > 0) or (close_5 > vwap_5 and body_dir < 0)
 
-            if not (bullish_reversal or has_long_wick) and not volume_climax:
-                return None
-
-            direction = "long"
-            signal_type = "VWAP Reversal (Bullish)"
+            if close_5 < vwap_5:
+                bullish_reversal = any(
+                    p in pat_1 for p in ["hammer", "bullish_engulfing", "tweezer_bottom", "pin_bar", "marubozu"]
+                )
+                lower_wick = min(candle_1["close"], candle_1["open"]) - candle_1["low"]
+                body = abs(candle_1["close"] - candle_1["open"])
+                has_long_wick = lower_wick > body * 1.5 if body > 0 else False
+                has_entry_confirmation = bullish_reversal or has_long_wick or volume_climax
+            else:
+                bearish_reversal = any(
+                    p in pat_1 for p in ["shooting_star", "bearish_engulfing", "tweezer_top", "pin_bar"]
+                )
+                upper_wick = candle_1["high"] - max(candle_1["close"], candle_1["open"])
+                body = abs(candle_1["close"] - candle_1["open"])
+                has_long_wick = upper_wick > body * 1.5 if body > 0 else False
+                has_entry_confirmation = bearish_reversal or has_long_wick or volume_climax
         else:
-            bearish_reversal = any(
-                p in pat_1 for p in ["shooting_star", "bearish_engulfing", "tweezer_top", "pin_bar"]
-            )
-            upper_wick = candle_1["high"] - max(candle_1["close"], candle_1["open"])
-            body = abs(candle_1["close"] - candle_1["open"])
-            has_long_wick = upper_wick > body * 1.5 if body > 0 else False
+            # Without 1m data, rely on volume climax and VWAP stretch
+            has_entry_confirmation = volume_climax
 
-            if not (bearish_reversal or has_long_wick) and not volume_climax:
-                return None
+        if not has_entry_confirmation:
+            return None
 
-            direction = "short"
-            signal_type = "VWAP Reversal (Bearish)"
+        direction = "long" if close_5 < vwap_5 else "short"
+        signal_type = f"VWAP Reversal ({'Bullish' if direction == 'long' else 'Bearish'})"
 
         score = 75
         if volume_climax: score += 10
         if vwap_distance >= 3.0: score += 5
         if moving_toward_vwap: score += 5
-        if macd_1 > macd_signal_1 if direction == "long" else macd_1 < macd_signal_1: score += 5
+        if df_1 is not None and tf_1:
+            macd_1 = tf_1.get("macd", 0)
+            macd_signal_1 = tf_1.get("macd_signal", 0)
+            if macd_1 > macd_signal_1 if direction == "long" else macd_1 < macd_signal_1:
+                score += 5
         if score < CONFIG["scanners"]["vwap_reversal"]["min_confidence"]:
             return None
 
         kl = self._compute_key_levels("5m")
+        if not self._is_near_key_level(kl, close_5, atr_5, direction):
+            return None
         return {
             "ticker": self.ticker,
             "signal": signal_type,
@@ -767,25 +783,35 @@ class FailedBreakoutBreakdownBase(BaseScanner):
         return levels
 
     def scan(self) -> Optional[Dict[str, Any]]:
-        for tf in ("5m", "1m"):
+        for tf in ("5m",):
             self._compute_indicators_for_tf(tf)
         tf_5 = self.indicators.get("5m", {})
-        tf_1 = self.indicators.get("1m", {})
-        if not tf_5 or not tf_1:
+        if not tf_5:
             return None
 
         df_5 = self.timeframe_data.get("5m")
         df_1 = self.timeframe_data.get("1m")
-        if df_5 is None or df_1 is None or len(df_5) < 20:
+        if df_5 is None or len(df_5) < 20:
             return None
 
         levels = self._find_key_levels(df_5)
         close_5 = df_5["close"].iloc[-1]
-        candle_1 = df_1.iloc[-1]
         pat_1 = self.patterns.get("1m", [])
 
         vol_5 = self.volume_analysis.get("5m", {})
         vol_spike = vol_5.get("is_spike", False) or vol_5.get("volume_ratio", 1) >= 1.5
+
+        # Determine candle direction from 5m or 1m
+        candle_bullish = False
+        candle_bearish = False
+        if df_1 is not None:
+            candle_1 = df_1.iloc[-1]
+            candle_bullish = candle_1["close"] > candle_1["open"]
+            candle_bearish = candle_1["close"] < candle_1["open"]
+        else:
+            last_5m = df_5.iloc[-1]
+            candle_bullish = last_5m["close"] > last_5m["open"]
+            candle_bearish = last_5m["close"] < last_5m["open"]
 
         # Check level breaks
         if self.scanner_type == "failed_breakdown":
@@ -795,15 +821,14 @@ class FailedBreakoutBreakdownBase(BaseScanner):
                 levels.get("orib_low", float("inf")),
             )
             if close_5 >= low_level * 0.995:
-                return None  # price didn't break the level
+                return None
 
-            # Price broke below and immediately recovered
             prev_low = df_5["low"].iloc[-3:].min()
             if prev_low >= low_level or close_5 <= low_level:
                 return None
 
-            recovered_above = close_5 > low_level and candle_1["close"] > candle_1["open"]
-            absorption_candle = candle_1["close"] > candle_1["open"] and vol_spike
+            recovered_above = close_5 > low_level and candle_bullish
+            absorption_candle = candle_bullish and vol_spike
 
             if not (recovered_above and (absorption_candle or "bullish_engulfing" in pat_1)):
                 return None
@@ -823,8 +848,8 @@ class FailedBreakoutBreakdownBase(BaseScanner):
             if prev_high <= high_level or close_5 >= high_level:
                 return None
 
-            rejection_above = close_5 < high_level and candle_1["close"] < candle_1["open"]
-            rejection_candle = candle_1["close"] < candle_1["open"] and vol_spike
+            rejection_above = close_5 < high_level and candle_bearish
+            rejection_candle = candle_bearish and vol_spike
 
             if not (rejection_above and (rejection_candle or "bearish_engulfing" in pat_1)):
                 return None
@@ -839,6 +864,8 @@ class FailedBreakoutBreakdownBase(BaseScanner):
             return None
 
         kl = self._compute_key_levels("5m")
+        if not self._is_near_key_level(kl, close_5, tf_5.get("atr", 0), direction):
+            return None
         return {
             "ticker": self.ticker,
             "signal": signal_type,

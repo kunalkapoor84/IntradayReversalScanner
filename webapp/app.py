@@ -57,7 +57,6 @@ def run_async(coro):
 
 @app.after_request
 def cleanup(response):
-    market_data.invalidate_cache()
     gc.collect()
     return response
 
@@ -69,7 +68,8 @@ def index():
 
 @app.route("/api/scan_single", methods=["POST"])
 def scan_single():
-    ticker = request.json.get("ticker", "").strip().upper()
+    data = request.get_json(silent=True) or {}
+    ticker = data.get("ticker", "").strip().upper()
     if not ticker:
         return jsonify({"error": "No ticker provided"}), 400
 
@@ -167,12 +167,35 @@ def scan_single():
                         "risk_reward": rm.get("risk_reward", 0),
                         "quality": rm.get("quality", ""),
                         "targets": rm.get("targets", {}),
+                        "timeframe_signals": signal.get("timeframe_signals", {}),
+                        "close_5": signal.get("close_5", 0),
+                        "vwap_5": signal.get("vwap_5", 0),
                     })
             except Exception as e:
                 result["scanner_results"].append({
                     "scanner": stype,
                     "error": str(e)[:100],
                 })
+
+        # Filter signals by VWAP direction
+        vwap_price = None
+        close_price = None
+        tf_5 = result.get("timeframes", {}).get("5m", {})
+        if "vwap" in tf_5 and "close" in tf_5:
+            vwap_price = tf_5["vwap"]
+            close_price = tf_5["close"]
+        if vwap_price and close_price:
+            filtered = []
+            for s in result["scanner_results"]:
+                if "error" in s:
+                    filtered.append(s)
+                    continue
+                if s.get("direction") == "long" and close_price < vwap_price:
+                    continue
+                if s.get("direction") == "short" and close_price > vwap_price:
+                    continue
+                filtered.append(s)
+            result["scanner_results"] = filtered
 
         return jsonify(convert_val(result))
 
@@ -183,7 +206,8 @@ def scan_single():
 @app.route("/api/scan_all", methods=["POST"])
 def scan_all():
     try:
-        req_ids = request.json.get("security_ids") if request.json else None
+        data = request.get_json(silent=True) or {}
+        req_ids = data.get("security_ids")
 
         df = run_async(market_data.build_universe())
         if df.empty:
@@ -226,12 +250,28 @@ def scan_all():
                 "risk_reward": rm.get("risk_reward", 0),
                 "quality": rm.get("quality", ""),
                 "price": s.get("price", 0),
+                "timeframe_signals": s.get("timeframe_signals", {}),
+                "vwap_5": s.get("vwap_5", 0),
+                "close_5": s.get("close_5", 0),
                 "indicators": {
                     "rsi_5": s.get("indicators", {}).get("rsi_5", 0),
                     "adx_5": s.get("indicators", {}).get("adx_5", 0),
                     "atr_5": s.get("indicators", {}).get("atr_5", 0),
                 },
             })
+
+        # Filter signals by VWAP direction
+        filtered_results = []
+        for s in results:
+            vwap = s.get("vwap_5", 0)
+            close = s.get("close_5", 0)
+            if vwap and close:
+                if s.get("direction") == "long" and close < vwap:
+                    continue
+                if s.get("direction") == "short" and close > vwap:
+                    continue
+            filtered_results.append(s)
+        results = filtered_results
 
         results.sort(key=lambda x: x.get("confidence", 0), reverse=True)
         return jsonify(convert_val({

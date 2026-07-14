@@ -151,6 +151,25 @@
             return html;
         }
 
+        function buildPatternHtml(s) {
+            const ts = s.timeframe_signals;
+            if (!ts) return '';
+            const pats = new Set();
+            const keys = ['1m_patterns', '5m_patterns', 'patterns_1m', 'patterns_5m', 'smc', 'structure_change'];
+            for (const k of keys) {
+                if (Array.isArray(ts[k])) {
+                    ts[k].forEach(p => {
+                        if (typeof p === 'string') pats.add(p.replace(/_/g, ' ').replace(/\b\w/g, c => c.toUpperCase()));
+                    });
+                }
+            }
+            if (pats.size === 0) return '';
+            let html = '<div class="signal-patterns">';
+            pats.forEach(p => { html += `<span class="pattern-tag">${p}</span>`; });
+            html += '</div>';
+            return html;
+        }
+
         function buildSignalCard(s) {
             return `
                 <div class="signal-card ${s.direction}">
@@ -163,6 +182,7 @@
                     </div>
                     <div class="signal-body">
                         <div class="signal-type">${s.signal}</div>
+                        ${buildPatternHtml(s)}
                         <div class="signal-details">
                             <span>Entry: ${fmt(s.entry)}</span>
                             <span>Stop: ${fmt(s.stop_loss)}</span>

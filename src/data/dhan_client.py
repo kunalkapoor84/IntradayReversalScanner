@@ -4,6 +4,7 @@ import asyncio
 import csv
 import io
 import json
+import random
 import time
 from datetime import datetime, timedelta
 from typing import Any, Dict, List, Optional, Tuple
@@ -33,14 +34,18 @@ class DhanHTTPClient:
         self._ws_client: Optional[Any] = None
         self._has_valid_creds: bool = bool(self.client_id and self.access_token and "your_" not in self.client_id)
         self._last_request = 0.0
+        self._min_interval = 0.5
+        self._rate_limited_until = 0.0
         self._security_list_cache: Dict[str, Tuple[float, List[Dict[str, Any]]]] = {}
 
     async def _request(self, method: str, endpoint: str, **kwargs) -> Dict[str, Any]:
         url = f"{self.base_url}{endpoint}"
         now = time.monotonic()
         since_last = now - self._last_request
-        if since_last < 0.2:
-            await asyncio.sleep(0.2 - since_last)
+        if since_last < self._min_interval:
+            await asyncio.sleep(self._min_interval - since_last)
+        if now < self._rate_limited_until:
+            await asyncio.sleep(self._rate_limited_until - now)
         self._last_request = time.monotonic()
         async with httpx.AsyncClient(
             base_url=self.base_url,
@@ -58,8 +63,9 @@ class DhanHTTPClient:
                     return response.json()
                 except httpx.HTTPStatusError as e:
                     if e.response.status_code == 429:
-                        wait = 2 ** (attempt + 1)
-                        logger.warning(f"Rate limited on {endpoint}, retrying in {wait}s")
+                        wait = 2 ** (attempt + 1) + random.uniform(0, 0.5)
+                        self._rate_limited_until = time.monotonic() + wait - self._min_interval
+                        logger.warning(f"Rate limited on {endpoint}, retrying in {wait:.1f}s")
                         await asyncio.sleep(wait)
                         continue
                     logger.error(f"HTTP error {e.response.status_code} on {endpoint}: {e.response.text}")
@@ -503,10 +509,7 @@ class MarketDataManager:
                 result[interval] = df
             except Exception as e:
                 logger.warning(f"Failed to fetch {interval} data for {security_id}: {e}")
-                df = self._generate_synthetic_data(security_id, interval, bars)
-                if not df.empty:
-                    self._candle_cache[cache_key] = df
-                result[interval] = df
+                result[interval] = pd.DataFrame()
 
         return result
 
